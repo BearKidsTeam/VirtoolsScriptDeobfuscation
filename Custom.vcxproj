@@ -318,7 +318,9 @@
       <Optimization Condition="'$(Configuration)|$(Platform)'=='ReleaseStatic|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
     </ClCompile>
+    <ClCompile Include="Decorator.cpp" />
     <ClCompile Include="FreeBlock.cpp" />
+    <ClCompile Include="Generator.cpp" />
     <ClCompile Include="Parser.cpp" />
     <ClCompile Include="StdAfx.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='DebugStatic|Win32'">Disabled</Optimization>

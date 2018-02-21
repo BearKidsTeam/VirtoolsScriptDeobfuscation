@@ -1,10 +1,13 @@
 #include "ckall.h"
 #include "precomp.h"
 #include <map>
+#include "interfaceData.h"
 using namespace std;
 
 class Parser
 {
+public:
+	interface_t interface_data;
 private:
 	char *m_data;
 	char *m_filename;
@@ -64,20 +67,22 @@ private:
 	void parse_chunk(char *&p)
 	{
 		ClaimInt(p, "class_id");
-		ClaimInt(p, "length");
-		assert(0x10 == ClaimInt(p, "fixed_var1"));
-		into(parse_behavior_data(p));
+		int length = ClaimInt(p, "length");
+		into(parse_behavior_data(p, p + length * 4));
 	}
-	void parse_behavior_data(char *&p)
+	void parse_behavior_data(char *&p, char *end)
 	{
+		assert(0x10 == ClaimInt(p, "fixed_var1"));
 		int body_length = ClaimInt(p, "body_length");
 		into(parse_body(p, p + body_length * 4));
+		interface_data.tail = p;
+		interface_data.tail_length = end - p;
 	}
 	void parse_body(char *&p, char *end)
 	{
 		int interface_length = ClaimInt(p, "interface_length");
 		if(interface_length)
-		into(parse_interface_data(p, p + interface_length * 4));
+			into(parse_interface_data(p, p + interface_length * 4));
 		assert(0x20 == ClaimInt(p, "fixed_var3"));
 		assert(0 == ClaimInt(p, "fixed_var4"));
 		assert(p == end);
@@ -193,7 +198,7 @@ private:
 		int next_int = *(int *)p;
 		assert(0x200 == folded || 0x0 == folded); // when 0x200: single block or folded bg
 
-		into(parse_expend_shape(p));
+		into(parse_expand_shape(p));
 		if (m_bb_type_map[id] == 0x0) // single block
 		{
 			for (int i = 0; i < 3; ++i)
@@ -231,10 +236,10 @@ private:
 		ClaimFloat(p, "h_size");
 		ClaimFloat(p, "v_size");
 	}
-	void parse_expend_shape(char *&p)
+	void parse_expand_shape(char *&p)
 	{
-		ClaimFloat(p, "h_expend_size");
-		ClaimFloat(p, "v_expend_size");
+		ClaimFloat(p, "h_expand_size");
+		ClaimFloat(p, "v_expand_size");
 	}
 	void parse_input(char *&p)
 	{
@@ -350,7 +355,7 @@ void pre_scan(CKBehavior *bb, map<int,int> &mym)
 		pre_scan(sub_bb, mym);
 	}
 }
-void parse_bb_test(CKBehavior *bb)
+interface_t parse_bb_test(CKBehavior *bb, CKFile *file)
 {
 
 	char filename[1024];
@@ -367,7 +372,6 @@ void parse_bb_test(CKBehavior *bb)
 	map<int, int> bbTypeMap;
 	pre_scan(bb, bbTypeMap);
 	sprintf(filename, "C:\\Users\\jjy\\Desktop\\test\\parser\\parser_out_%s.log", name);
-	CKFile *file = bb->GetCKContext()->CreateCKFile();
 	bb->PreSave(file, 0);
 	CKStateChunk *chunk = bb->Save(file, 0);
 	int length = chunk->ConvertToBuffer(NULL);
@@ -376,4 +380,5 @@ void parse_bb_test(CKBehavior *bb)
 	buffer[length] = 0;
 	Parser parser = Parser(buffer, filename, bbTypeMap);
 	parser.parse();
+	return parser.interface_data;
 }

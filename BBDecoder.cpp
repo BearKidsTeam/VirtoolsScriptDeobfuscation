@@ -1,5 +1,5 @@
 #include "precomp.h"
-
+#include "interfaceData.h"
 
 CKObjectDeclaration	*FillBBDecoderDecl();
 CKERROR CreateBBDecoderProto(CKBehaviorPrototype **);
@@ -50,7 +50,9 @@ CKERROR CreateBBDecoderProto(CKBehaviorPrototype **pproto)
 
 int BBDecoder(const CKBehaviorContext& behcontext)
 {
-	void parse_bb_test(CKBehavior *bb);
+	interface_t parse_bb_test(CKBehavior *bb, CKFile *file);
+	void decorate(interface_t &data, CKBehavior *bb);
+	void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file);
 	CKBehavior* beh = behcontext.Behavior;
 	CKContext* ctx = behcontext.Context;
 	CKVariableManager* vMan = ctx->GetVariableManager();
@@ -77,9 +79,25 @@ int BBDecoder(const CKBehaviorContext& behcontext)
 		CKObject* o = array->GetData(ctx);
 		if (CKIsChildClassOf(o, CKCID_BEHAVIOR)) {
 			CKBehavior* bo = (CKBehavior*)o;
-			parse_bb_test(bo);
+			CKFile *file = bo->GetCKContext()->CreateCKFile();
+			interface_t data = parse_bb_test(bo, file);
+			decorate(data, bo);
+			generate_bb_test(data, bo, file);
 		}
 	}
+	CKLevel* level = ctx->GetCurrentLevel();
+	for (array->Reset(); !array->EndOfList(); array->Next()) {
+		CKObject* o = array->GetData(ctx);
+		if (!CKIsChildClassOf(o, CKCID_BEHAVIOR)) {
+			if (CKIsChildClassOf(o, CKCID_SCENE)) {
+				level->AddScene((CKScene*)o);
+			}
+			else {
+				level->AddObject(o);
+			}
+		}
+	}
+	level->BeginAddSequence(FALSE);
 	DeleteCKObjectArray(array);
 	int i, count = beh->GetInputCount();
 	for (i = 0; i<count; ++i) {
