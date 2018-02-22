@@ -250,7 +250,7 @@ private:
 	void parse_output(char *&p)
 	{
 		ClaimInt(p, "position");
-		ClaimInt(p, "minus1");
+		ClaimInt(p, "positive1");
 	}
 	void parse_op_pos(char *&p)
 	{
@@ -373,7 +373,7 @@ void parse_string_test(CKBehavior *bb,char *buffer)
 	}
 	map<int, int> bbTypeMap;
 	pre_scan(bb, bbTypeMap);
-	sprintf(filename, "C:\\Users\\jjy\\Desktop\\test\\generator\\parser_out_%s.log", name);
+	sprintf(filename, base_path "/generator/parser_out_%s.log", name);
 	Parser parser = Parser(buffer, filename, bbTypeMap);
 	parser.parse();
 }
@@ -393,7 +393,7 @@ interface_t parse_bb_test(CKBehavior *bb, CKFile *file)
 	}
 	map<int, int> bbTypeMap;
 	pre_scan(bb, bbTypeMap);
-	sprintf(filename, "C:\\Users\\jjy\\Desktop\\test\\parser\\parser_out_%s.log", name);
+	sprintf(filename, base_path "/parser/parser_out_%s.log", name);
 	bb->PreSave(file, 0);
 	CKStateChunk *chunk = bb->Save(file, 0);
 	int length = chunk->ConvertToBuffer(NULL);

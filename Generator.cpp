@@ -34,13 +34,61 @@ public:
 	{
 
 	}
-	void generate_link_op_comment_localp_sharedp(char *&p)
+	void generate_point(char *&p,point_t &pnt)
 	{
-		generate_int(p, 0);
-		generate_int(p, 0);
-		generate_int(p, 0);
-		generate_int(p, 0);
-		generate_int(p, 0);
+		generate_int(p,pnt.h);
+		generate_int(p,pnt.v);
+	}
+	void generate_link(char *&p,link_t &lnk)
+	{
+		generate_int(p,lnk.type);
+		generate_int(p,lnk.id);
+		generate_int(p,lnk.start.id);
+		generate_int(p,lnk.start.index);
+		generate_int(p,lnk.start.type);
+		generate_int(p,lnk.point_count);
+		for(int i=0;i<lnk.point_count;++i)
+		generate_point(p,lnk.points[i]);
+		generate_int(p,lnk.end.id);
+		generate_int(p,lnk.end.index);
+		generate_int(p,lnk.end.type);
+	}
+	void generate_op(char *&p,op_t &op)
+	{
+		generate_int(p,op.id);
+		generate_int(p,op.h_pos);
+		generate_int(p,op.v_pos);
+	}
+	void generate_io(char *&p,int v,int isin)
+	{
+		generate_int(p,v);
+		generate_int(p,isin?-1:1);
+	}
+	void generate_link_op_comment_localp_sharedp(char *&p,bb_t &bb)
+	{
+		generate_int(p, bb.links.size());
+		for(size_t i=0;i<bb.links.size();++i)
+			generate_link(p,bb.links[i]);
+		generate_int(p, bb.ops.size());
+		for(size_t i=0;i<bb.ops.size();++i)
+			generate_op(p,bb.ops[i]);
+		generate_int(p, 0);//no comments anyway
+		generate_int(p, bb.local_params.size());
+		for(size_t i=0;i<bb.local_params.size();++i)
+		{
+			generate_int(p,bb.local_params[i].h_pos);
+			generate_int(p,bb.local_params[i].v_pos);
+		}
+		for(size_t i=0;i<bb.local_params.size();++i)
+			generate_int(p,bb.local_params[i].style);
+		generate_int(p, bb.shared_params.size());
+		for(size_t i=0;i<bb.shared_params.size();++i)
+		{
+			generate_int(p,bb.shared_params[i].h_pos);
+			generate_int(p,bb.shared_params[i].v_pos);
+		}
+		for(size_t i=0;i<bb.shared_params.size();++i)
+			generate_int(p,bb.shared_params[i].style);
 	}
 	void generate_start(char *&p)
 	{
@@ -67,7 +115,19 @@ public:
 		}
 		else
 		{
-			throw "not implemented";
+			generate_link_op_comment_localp_sharedp(p,bb);
+			generate_int(p,bb.inward_inputs.size());
+			for(size_t i=0;i<bb.inward_inputs.size();++i)
+			generate_io(p,bb.inward_inputs[i],1);
+			generate_int(p,bb.outward_inputs.size());
+			for(size_t i=0;i<bb.outward_inputs.size();++i)
+			generate_io(p,bb.outward_inputs[i],1);
+			generate_int(p,bb.inward_outputs.size());
+			for(size_t i=0;i<bb.inward_outputs.size();++i)
+			generate_io(p,bb.inward_outputs[i],0);
+			generate_int(p,bb.outward_outputs.size());
+			for(size_t i=0;i<bb.outward_outputs.size();++i)
+			generate_io(p,bb.outward_outputs[i],0);
 		}
 	}
 	void generate_pos_info(char *&p)
@@ -82,7 +142,8 @@ public:
 		generate_int(p, m_data.n_bb + 1);
 		generate_start(p);
 		generate_int(p, 0xc8c8c8);
-		generate_link_op_comment_localp_sharedp(p);
+		bb_t nul;
+		generate_link_op_comment_localp_sharedp(p,nul);
 		for (int i = 0; i < m_data.n_bb; ++i)
 		{
 			generate_bb(p, m_data.bbs[i]);
@@ -165,7 +226,7 @@ void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file)
 		if (name[i] == '.' || name[i] == '_') continue;
 		name[i] = '_';
 	}
-	sprintf(filename, "C:\\Users\\jjy\\Desktop\\test\\generator\\generator_out_%s.log", name);
+	sprintf(filename, base_path "/generator/generator_out_%s.log", name);
 	Generator generator = Generator(interface_data);
 	char *buffer = new char[1048576];
 	int length = generator.Generate(buffer);
