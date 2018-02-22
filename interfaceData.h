@@ -102,7 +102,8 @@ struct bb_t
 };
 struct interface_t
 {
-	int n_obj_fake;
+	int class_id;
+	// int n_obj_fake;
 	start_t start;
 	int n_links;
 	vector<link_t> links;

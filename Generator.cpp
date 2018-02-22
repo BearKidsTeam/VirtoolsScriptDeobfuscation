@@ -22,17 +22,98 @@ private:
 		*(char *)p = data;
 		p += 1;
 	}
+	void generate_rect(char *&p, rect_t &data)
+	{
+		generate_float(p, data.h_pos);
+		generate_float(p, data.v_pos);
+		generate_float(p, data.h_size);
+		generate_float(p, data.v_size);
+	}
 public:
 	Generator(interface_t &data):m_data(data)
 	{
 
+	}
+	void generate_link_op_comment_localp_sharedp(char *&p)
+	{
+		generate_int(p, 0);
+		generate_int(p, 0);
+		generate_int(p, 0);
+		generate_int(p, 0);
+		generate_int(p, 0);
+	}
+	void generate_start(char *&p)
+	{
+		generate_int(p, m_data.start.id);
+		for (int i = 0; i < 3; ++i)
+			generate_int(p, 0);
+		generate_rect(p, m_data.start.pos);
+		for (int i = 0; i < 2; ++i)
+			generate_int(p, 0);
+	}
+	void generate_bb(char *&p,bb_t &bb)
+	{
+		generate_int(p, bb.id);
+		generate_int(p, bb.folded ? 0x200 : 0x0);
+		generate_int(p, bb.depth);
+		generate_rect(p, bb.size);
+		generate_float(p, bb.h_expand_size);
+		generate_float(p, bb.v_expand_size);
+		if (!bb.is_bg)
+		{
+			generate_int(p, 0);
+			generate_int(p, 0);
+			generate_int(p, 0);
+		}
+		else
+		{
+			throw "not implemented";
+		}
+	}
+	void generate_pos_info(char *&p)
+	{
+		generate_int(p, m_data.n_bb + 1 +
+			m_data.n_links + m_data.n_ops + m_data.n_comments + m_data.n_local_param + m_data.n_shared_param); // tot obj count
+		generate_int(p, 0);
+		generate_int(p, 0);
+		generate_int(p, 1);
+		generate_int(p, 0); // size-related-thing, unknown yet
+		generate_int(p, 0x16);
+		generate_int(p, m_data.n_bb + 1);
+		generate_start(p);
+		generate_int(p, 0xc8c8c8);
+		generate_link_op_comment_localp_sharedp(p);
+		for (int i = 0; i < m_data.n_bb; ++i)
+		{
+			generate_bb(p, m_data.bbs[i]);
+		}
+	}
+	void generate_interface(char *&p)
+	{
+		generate_int(p, 0xFFFFFFFF);
+		generate_int(p, 0x70000);
+		int *length = (int *)p;
+		generate_int(p, -1);
+		generate_int(p, 0);
+		char *begin = p;
+		generate_pos_info(p);
+		*length = (p - begin) / 4;
+		generate_int(p, 0x54543B94);
+		generate_int(p, 0);
+		generate_int(p, 0);
+		int n_obj_fake = m_data.n_bb + 1 +
+			m_data.n_links + m_data.n_ops + m_data.n_comments + m_data.n_local_param + m_data.n_shared_param;
+		for (int i = 0; i < n_obj_fake; ++i)
+		{
+			generate_int(p, 0);
+		}
 	}
 	void generate_body(char *&p)
 	{
 		int *length = (int *)p;
 		generate_int(p, -1);
 		char *begin = p;
-		// generate_interface(p);
+		generate_interface(p);
 		*length = (p - begin) / 4;
 		generate_int(p, 0x20);
 		generate_int(p, 0);
@@ -53,12 +134,14 @@ public:
 	void generate_all(char *&p)
 	{
 		char *none = 0;
-		generate_int(p, 0xcabba9e);
+		generate_int(p, m_data.class_id);
 		int *length = (int *)p;
 		generate_int(p, -1);
 		char *begin = p;
 		generate_behavior_data(p);
 		*length = (p - begin) / 4;
+		generate_int(p, 0x1);
+		generate_int(p, 0x2); // Some padding
 	}
 
 	int Generate(char *output)
@@ -92,6 +175,9 @@ void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file)
 		fputc(buffer[i], fout);
 	}
 	fclose(fout);
+	extern void parse_string_test(CKBehavior *bb, char *buffer);
+	parse_string_test(bb, buffer);
+	
 	CKStateChunk *chunk = CreateCKStateChunk((CK_CLASSID)0x0);
 	chunk->Clear();
 	chunk->ConvertFromBuffer(buffer);

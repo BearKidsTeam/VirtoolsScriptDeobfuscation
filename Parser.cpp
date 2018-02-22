@@ -66,7 +66,8 @@ private:
 	}
 	void parse_chunk(char *&p)
 	{
-		ClaimInt(p, "class_id");
+		int class_id = ClaimInt(p, "class_id");
+		interface_data.class_id = class_id;
 		int length = ClaimInt(p, "length");
 		into(parse_behavior_data(p, p + length * 4));
 	}
@@ -116,7 +117,7 @@ private:
 		int n_bb_and_start = ClaimInt(p, "n_bb_and_start");
 		into(parse_start(p));
 		assert(0xc8c8c8 == ClaimInt(p, "c8c8c8"));
-		parse_link_op_zero_localp_sharedp(p);
+		parse_link_op_comment_localp_sharedp(p);
 		for (int i = 0; i < n_bb_and_start - 1; ++i)
 		{
 			into(parse_bb(p));
@@ -128,7 +129,7 @@ private:
 		}
 		return n_obj_fake;
 	}
-	void parse_link_op_zero_localp_sharedp(char *&p)
+	void parse_link_op_comment_localp_sharedp(char *&p)
 	{
 		int link_count = ClaimInt(p, "link_count");
 		for (int i = 0; i < link_count; ++i)
@@ -206,7 +207,7 @@ private:
 		}
 		else // bg
 		{
-			parse_link_op_zero_localp_sharedp(p);
+			parse_link_op_comment_localp_sharedp(p);
 			int inward_input_count = ClaimInt(p, "inward_input_count");
 			for (int i = 0; i < inward_input_count; ++i)
 			{
@@ -290,6 +291,7 @@ public:
 		m_data = data;
 		m_filename = filename;
 		m_bb_type_map = bb_type_map;
+		interface_data = interface_t();
 	}
 	void parse()
 	{
@@ -355,9 +357,29 @@ void pre_scan(CKBehavior *bb, map<int,int> &mym)
 		pre_scan(sub_bb, mym);
 	}
 }
+
+void parse_string_test(CKBehavior *bb,char *buffer)
+{
+	char filename[1024];
+	char name[1024];
+	strcpy(name, bb->GetName());
+	for (int i = strlen(name) - 1; i >= 0; --i)
+	{
+		if (name[i] >= 'a' && name[i] <= 'z') continue;
+		if (name[i] >= 'A' && name[i] <= 'Z') continue;
+		if (name[i] >= '0' && name[i] <= '9') continue;
+		if (name[i] == '.' || name[i] == '_') continue;
+		name[i] = '_';
+	}
+	map<int, int> bbTypeMap;
+	pre_scan(bb, bbTypeMap);
+	sprintf(filename, "C:\\Users\\jjy\\Desktop\\test\\generator\\parser_out_%s.log", name);
+	Parser parser = Parser(buffer, filename, bbTypeMap);
+	parser.parse();
+}
+
 interface_t parse_bb_test(CKBehavior *bb, CKFile *file)
 {
-
 	char filename[1024];
 	char name[1024];
 	strcpy(name, bb->GetName());
