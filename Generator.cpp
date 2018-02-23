@@ -133,7 +133,9 @@ public:
 	void generate_pos_info(char *&p)
 	{
 		generate_int(p, m_data.n_bb + 1 +
-			m_data.n_links + m_data.n_ops + m_data.n_comments + m_data.n_local_param + m_data.n_shared_param); // tot obj count
+			m_data.script_root.n_links + m_data.script_root.n_ops +
+			m_data.script_root.n_comments + m_data.script_root.n_local_param +
+			m_data.script_root.n_shared_param); // tot obj count
 		generate_int(p, 0);
 		generate_int(p, 0);
 		generate_int(p, 1);
@@ -142,8 +144,7 @@ public:
 		generate_int(p, m_data.n_bb + 1);
 		generate_start(p);
 		generate_int(p, 0xc8c8c8);
-		bb_t nul;
-		generate_link_op_comment_localp_sharedp(p,nul);
+		generate_link_op_comment_localp_sharedp(p,m_data.script_root);
 		for (int i = 0; i < m_data.n_bb; ++i)
 		{
 			generate_bb(p, m_data.bbs[i]);
@@ -163,7 +164,9 @@ public:
 		generate_int(p, 0);
 		generate_int(p, 0);
 		int n_obj_fake = m_data.n_bb + 1 +
-			m_data.n_links + m_data.n_ops + m_data.n_comments + m_data.n_local_param + m_data.n_shared_param;
+			m_data.script_root.n_links + m_data.script_root.n_ops + 
+			m_data.script_root.n_comments + m_data.script_root.n_local_param +
+			m_data.script_root.n_shared_param;
 		for (int i = 0; i < n_obj_fake; ++i)
 		{
 			generate_int(p, 0);

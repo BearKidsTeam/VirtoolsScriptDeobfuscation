@@ -37,6 +37,14 @@ struct link_endpoint_t
 	int id;
 	int index;
 	int type;
+	//types:
+	// 5 - pOut link (shortcut) (has the same id as the link target)
+	// 7 - pIn
+	// 8 - pOut
+	// 9 - local p
+	//12 - bIn
+	//13 - bOut
+	//26 - "Start" bIn
 };
 
 struct link_t
@@ -61,17 +69,17 @@ struct comment_t
 };
 enum param_style_enum
 {
-	param_style_basic = 0x200,
-	param_style_style1 = 0x400,
-	param_style_style2 = 0x1000,
-	param_style_style3 = 0x2000
+	param_style_name = 0x200,
+	param_style_closed = 0x400,
+	param_style_namevalue = 0x1000,
+	param_style_value = 0x2000
 };
 struct param_t
 {
 	int id;
 	int h_pos;
 	int v_pos;
-	param_style_enum style = param_style_basic;
+	param_style_enum style = param_style_name;
 	int source_id;
 };
 struct bb_t
@@ -105,16 +113,7 @@ struct interface_t
 	int class_id;
 	// int n_obj_fake;
 	start_t start;
-	int n_links;
-	vector<link_t> links;
-	int n_ops;
-	vector<op_t> ops;
-	int n_comments;
-	vector<comment_t> comments;
-	int n_local_param;
-	vector<param_t> local_params;
-	int n_shared_param;
-	vector<param_t> shared_params;
+	bb_t script_root;
 	int n_bb;
 	vector<bb_t> bbs;
 

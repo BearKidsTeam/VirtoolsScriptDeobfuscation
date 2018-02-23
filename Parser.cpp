@@ -150,7 +150,11 @@ private:
 		into(parse_int_points(p, local_param_count));
 		for (int i = 0; i < local_param_count; ++i)
 		{
-			ClaimInt(p, "local_param_style %d", i); // one in 0x200 0x400 0x1000 0x2000
+			ClaimInt(p, "local_param_style %d", i); 
+			//0x200 - name
+			//0x400 - symbolic (closed)
+			//0x1000 - name & value
+			//0x2000 - value
 		}
 		int shared_param_count = ClaimInt(p, "shared_param_count");
 		into(parse_int_points(p, shared_param_count));
@@ -178,8 +182,8 @@ private:
 	}
 	void parse_link(char *&p)
 	{
-		int link_type = ClaimInt(p, "link_type");
-		assert(link_type == 1 || link_type == 2 || link_type == 0x10002); //0x10002 is for the BLUE plink
+		int link_type = ClaimInt(p, "link_type");//1=blink 2=plink 10002=exported plink
+		assert(link_type == 1 || link_type == 2 || link_type == 0x10002);
 		ClaimInt(p, "id");
 		ClaimInt(p, "out_obj_id");
 		ClaimInt(p, "out_index");
@@ -187,7 +191,7 @@ private:
 		int points_count = ClaimInt(p, "points_count");
 		into(parse_points(p, points_count));
 		ClaimInt(p, "in_obj_id");
-		ClaimInt(p, "in_index");
+		ClaimInt(p, "in_index");//-2 = target
 		ClaimInt(p, "in_type");
 	}
 	void parse_bb(char *&p)
