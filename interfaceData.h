@@ -41,7 +41,8 @@ struct link_endpoint_t
 	// 5 - pOut link (shortcut) (has the same id as the link target)
 	// 7 - pIn
 	// 8 - pOut
-	// 9 - local p
+	// 9 - pLocal
+	//10 - target pIn
 	//12 - bIn
 	//13 - bOut
 	//26 - "Start" bIn

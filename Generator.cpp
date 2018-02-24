@@ -89,6 +89,8 @@ public:
 		}
 		for(size_t i=0;i<bb.shared_params.size();++i)
 			generate_int(p,bb.shared_params[i].style);
+		for(size_t i=0;i<bb.shared_params.size();++i)
+			generate_int(p,bb.shared_params[i].source_id);
 	}
 	void generate_start(char *&p)
 	{

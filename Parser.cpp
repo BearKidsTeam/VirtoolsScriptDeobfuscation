@@ -113,7 +113,7 @@ private:
 		assert(0 == ClaimInt(p, "zero"));
 		assert(1 == ClaimInt(p, "one"));
 		ClaimInt(p, "size_related_thing");
-		assert(0x16 == ClaimInt(p, "fixed_var1"));
+		ClaimInt(p, "fixed_var1");
 		int n_bb_and_start = ClaimInt(p, "n_bb_and_start");
 		into(parse_start(p));
 		assert(0xc8c8c8 == ClaimInt(p, "c8c8c8"));

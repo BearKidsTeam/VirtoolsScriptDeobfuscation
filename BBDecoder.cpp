@@ -1,5 +1,6 @@
 #include "precomp.h"
 #include "interfaceData.h"
+#include <ctime>
 
 CKObjectDeclaration	*FillBBDecoderDecl();
 CKERROR CreateBBDecoderProto(CKBehaviorPrototype **);
@@ -75,6 +76,7 @@ int BBDecoder(const CKBehaviorContext& behcontext)
 		DeleteCKObjectArray(array);
 		throw "fuck";
 	}
+	clock_t c=clock();
 	for (array->Reset(); !array->EndOfList(); array->Next()) {
 		CKObject* o = array->GetData(ctx);
 		if (CKIsChildClassOf(o, CKCID_BEHAVIOR)) {
@@ -85,6 +87,7 @@ int BBDecoder(const CKBehaviorContext& behcontext)
 			generate_bb_test(data, bo, file);
 		}
 	}
+	printfdbg("decorate+generate time: %f\n",1.*(clock()-c)/CLOCKS_PER_SEC);
 	CKLevel* level = ctx->GetCurrentLevel();
 	for (array->Reset(); !array->EndOfList(); array->Next()) {
 		CKObject* o = array->GetData(ctx);
