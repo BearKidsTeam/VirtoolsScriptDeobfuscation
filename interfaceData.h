@@ -34,7 +34,7 @@ struct start_t
 };
 struct link_endpoint_t
 {
-	int id;
+	unsigned int id;
 	int index;
 	int type;
 	//types:
