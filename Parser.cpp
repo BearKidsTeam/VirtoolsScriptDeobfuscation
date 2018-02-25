@@ -398,7 +398,7 @@ interface_t parse_bb_test(CKBehavior *bb, CKFile *file)
 	map<int, int> bbTypeMap;
 	pre_scan(bb, bbTypeMap);
 	sprintf(filename, base_path "/parser/parser_out_%s.log", name);
-	bb->PreSave(file, 0);
+	//bb->PreSave(file, 0);
 	CKStateChunk *chunk = bb->Save(file, 0);
 	int length = chunk->ConvertToBuffer(NULL);
 	char *buffer = new char[length + 1];

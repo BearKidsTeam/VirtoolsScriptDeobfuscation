@@ -193,7 +193,7 @@ void configure_plink(interface_t &data,CKBehavior *root)
 				{
 					link_t lnk;lnk.id=0;lnk.type=2;lnk.point_count=0;
 					lnk.start=link_endpoint_t{bb.id,bb.idx,dsrc->GetClassID()==CKCID_PARAMETERLOCAL?9:8};
-					lnk.end=link_endpoint_t{aa.id,aa.idx,pinp.idx==-2?10:7};
+					lnk.end=link_endpoint_t{aa.id,aa.idx,aa.idx==-2?10:7};
 					mappedb(aa.lnk_within).links.push_back(lnk);
 					++mappedb(aa.lnk_within).n_links;
 					conn=true;break;
