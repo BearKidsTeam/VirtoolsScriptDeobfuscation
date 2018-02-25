@@ -59,7 +59,7 @@ int BBDecoder(const CKBehaviorContext& behcontext)
 	CKVariableManager* vMan = ctx->GetVariableManager();
 
 	// Dynamic ?
-	BOOL dynamic = TRUE;
+	BOOL dynamic = FALSE;
 	CKBOOL keepSAS = FALSE;
 
 
