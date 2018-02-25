@@ -56,8 +56,8 @@ public:
 	void generate_op(char *&p,op_t &op)
 	{
 		generate_int(p,op.id);
-		generate_int(p,op.h_pos);
-		generate_int(p,op.v_pos);
+		generate_float(p,op.h_pos);
+		generate_float(p,op.v_pos);
 	}
 	void generate_io(char *&p,int v,int isin)
 	{
@@ -97,7 +97,10 @@ public:
 		generate_int(p, m_data.start.id);
 		for (int i = 0; i < 3; ++i)
 			generate_int(p, 0);
-		generate_rect(p, m_data.start.pos);
+		generate_float(p, m_data.start.v_start);
+		generate_float(p, m_data.start.h_start_pos);
+		generate_float(p, m_data.start.v_start_pos);
+		generate_float(p, m_data.start.v_size);
 		for (int i = 0; i < 2; ++i)
 			generate_int(p, 0);
 	}

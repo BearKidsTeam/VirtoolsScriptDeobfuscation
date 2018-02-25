@@ -30,7 +30,10 @@ struct point_t
 struct start_t
 {
 	int id;
-	rect_t pos = rect_t(0.0, 140.0, 100.0, 380.0);
+	float v_start;
+	float h_start_pos = 140.0;
+	float v_start_pos;
+	float v_size;
 };
 struct link_endpoint_t
 {
@@ -61,8 +64,8 @@ struct link_t
 struct op_t
 {
 	int id;
-	int h_pos;
-	int v_pos;
+	float h_pos;
+	float v_pos;
 };
 struct comment_t
 {

@@ -175,8 +175,10 @@ private:
 		int var2 = ClaimInt(p, "unknown var2");
 		for (int i = 0; i < 1; ++i)
 			assert(0 == ClaimInt(p, "zero %d", i + 1));
-		for (int i = 0; i < 4; ++i)
-			ClaimFloat(p, "position %d", i + 1);
+		ClaimFloat(p, "vertical script begin");
+		ClaimFloat(p, "horizontal start position");
+		ClaimFloat(p, "vertical start position");
+		ClaimFloat(p, "vertical script end");
 		for (int i = 0; i < 2; ++i)
 			assert(0 == ClaimInt(p, "zero %d", i + 1));
 	}
