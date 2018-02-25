@@ -39,9 +39,6 @@
     <None Include="res\Custom.rc2" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="behaviors src\precomp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="precomp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
