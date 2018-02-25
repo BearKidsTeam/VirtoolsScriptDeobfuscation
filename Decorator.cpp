@@ -20,8 +20,11 @@ void printfdbg(const char* fmt, ...)//print a format string to VS debug output
 
 class Decorator
 {
+private:
+	interface_t &data;
 public:
-	void decorate_start(interface_t &data, CKBehavior *bb)
+	Decorator(interface_t &target_data) :data(target_data) { }
+	void decorate_start(CKBehavior *bb)
 	{
 		assert(bb->GetInputCount() == 1);
 		data.start.id = bb->GetInput(0)->GetOwner()->GetID();
@@ -116,7 +119,7 @@ public:
 		throw;
 	}
 #define mappedb(id) (~bmap[id]?data.bbs[bmap[id]]:data.script_root)
-	pio_pos_t GetShortcutParamPos(interface_t &data, CK_ID within, CK_ID source)
+	pio_pos_t GetShortcutParamPos(CK_ID within, CK_ID source)
 		//Get a shortcut for `source` within the behavior `within`.
 		//If such shortcut doesn't exist, create it.
 	{
@@ -135,7 +138,7 @@ public:
 	//just iterate through all pIns and pOuts of all subbehaviors
 	//WARNING: this will look very ugly
 	//**UNTESTED**
-	void configure_plink(interface_t &data, CKBehavior *root)
+	void configure_plink(CKBehavior *root)
 		//Q: Why we have to configure these outside?
 		//A: Because a pLink may not belong to parent of the ends.
 		//   And cross-behavior pLinks may exist.
@@ -210,7 +213,7 @@ public:
 				if (!conn)//still not connected, use a shortcut instead
 				{
 					link_t lnk; lnk.id = 0; lnk.type = 2; lnk.point_count = 0;
-					pio_pos_t sshp = GetShortcutParamPos(data, pinp.lnk_within, dsrc->GetID());
+					pio_pos_t sshp = GetShortcutParamPos(pinp.lnk_within, dsrc->GetID());
 					lnk.start = link_endpoint_t{ pinp.lnk_within,sshp.idx,5 };
 					lnk.end = link_endpoint_t{ pinp.id,pinp.idx,pinp.idx == -2 ? 10 : 7 };
 					mappedb(pinp.lnk_within).links.push_back(lnk);
@@ -269,7 +272,7 @@ public:
 					{
 						link_t lnk; lnk.id = 0; lnk.type = 2; lnk.point_count = 0;
 						pio_pos_t ssp = vpout.front();
-						pio_pos_t sshp = GetShortcutParamPos(data, ssp.lnk_within, dest->GetID());
+						pio_pos_t sshp = GetShortcutParamPos(ssp.lnk_within, dest->GetID());
 						lnk.start = link_endpoint_t{ ssp.id,ssp.idx,8 };
 						lnk.end = link_endpoint_t{ sshp.id,sshp.idx,5 };
 						mappedb(ssp.lnk_within).links.push_back(lnk);
@@ -279,19 +282,86 @@ public:
 			}
 		}
 	}
+	void move_to_bb_input(param_t &p, bb_t &bb, int input_pos)
+	{
+		int bb_h_pos = (int)round((bb.size.h_pos) / 20.0);
+		int bb_v_pos = (int)round((bb.size.v_pos) / 20.0);
+		p.h_pos = bb_h_pos + input_pos;
+		p.v_pos = bb_v_pos - 1;
+	}
+	void move_to_bb_output(param_t &p, bb_t &bb, int input_pos)
+	{
+		int bb_h_pos = (int)round((bb.size.h_pos) / 20.0);
+		int bb_v_pos = (int)round((bb.size.v_pos) / 20.0);
+		p.h_pos = bb_h_pos + input_pos;
+		p.v_pos = bb_v_pos + (int)round((bb.size.v_size) / 20.0) + 1;
+	}
+	void calc_param_local_positions(bb_t &bg, CKBehavior *beh)
+	{
+		CKContext *ctx = beh->GetCKContext();
+		for (auto &plink : bg.links)
+		{
+			if (plink.type == 2) // plink
+			{
+				param_t *start = NULL;
+				if (plink.start.type == 9)
+					start = &bg.local_params[plink.start.index];
+				else if(plink.start.type==5)
+					start = &bg.shared_params[plink.start.index];
+				if (start)
+				{
+					if (plink.end.type == 7)
+						move_to_bb_input(*start, mappedb(plink.end.id), plink.end.index);
+					else if(plink.end.type == 10)
+						move_to_bb_input(*start, mappedb(plink.end.id), -1);
+				}
+				param_t *end = NULL;
+				if (plink.end.type == 9)
+					end = &bg.local_params[plink.end.index];
+				if (end)
+				{
+					if (plink.start.type == 8)
+						move_to_bb_output(*end, mappedb(plink.start.id), plink.start.index);
+				}
+
+			}
+		}
+	}
 	void calc_bb_size(bb_t &bb, CKBehavior *beh)
 	{
-		int height = max(beh->GetOutputCount(), beh->GetInputCount());
-		height = max(height, 1);
-		int width = max(beh->GetOutputParameterCount(), beh->GetInputParameterCount());
-		width = max(width, int((strlen(beh->GetName()) - 1) / 2.5) + 1);
-		width = max(width, 2);
-		bb.size.h_size = width*20.0;
-		bb.size.v_size = height*20.0;
+		if (bb.depth > 0)
+		{
+			int height = max(beh->GetOutputCount(), beh->GetInputCount());
+			height = max(height, 1);
+			int width = max(beh->GetOutputParameterCount(), beh->GetInputParameterCount());
+			width = max(width, int((strlen(beh->GetName()) - 1) / 2.5) + 1);
+			width = max(width, 2);
+			bb.size.h_size = width*20.0;
+			bb.size.v_size = height*20.0;
+			if (bb.is_bg)
+			{
+				bb.h_expand_size = bb.size.h_size * 10;
+				bb.v_expand_size = bb.size.v_size * 10;
+			}
+		}
+	}
+	void recalc_absolute_bb_pos(bb_t &bb, CKBehavior *beh, float start_h, float start_v)
+	{
+		if (bb.depth == 0)
+		{
+			bb.size.h_pos = 0;
+			bb.size.v_pos = 0;
+		}
+		bb.size.h_pos += start_h;
+		bb.size.v_pos += start_v;
 		if (bb.is_bg)
 		{
-			bb.h_expand_size = bb.size.h_size * 10;
-			bb.v_expand_size = bb.size.v_size * 10;
+			int cnt = beh->GetSubBehaviorCount();
+			for (int i = 0; i < cnt; ++i)
+			{
+				CKBehavior *sub_beh = beh->GetSubBehavior(i);
+				recalc_absolute_bb_pos(mappedb(sub_beh->GetID()), sub_beh, bb.size.h_pos, bb.size.v_pos);
+			}
 		}
 	}
 	void decorate_bb(bb_t &bb, CKBehavior *beh, int dpt)
@@ -361,7 +431,7 @@ public:
 			bb.n_local_param = bb.local_params.size();
 		}
 	}
-	void decorate_bbs(interface_t &data, CKBehavior *bb)
+	void decorate_bbs(CKBehavior *bb)
 	{
 		data.n_bb = 0;
 		data.bbs.clear();
@@ -387,18 +457,25 @@ public:
 				bq.push(std::make_pair(sub_bb, cdpt + 1));
 			}
 		}
-		configure_plink(data, bb);
+		configure_plink(bb);
+		CKContext *ctx = bb->GetCKContext();
+		for (auto &kv : bmap)
+		{
+			bb_t &sub_bb = mappedb(kv.first);
+			calc_param_local_positions(mappedb(kv.first), (CKBehavior *)ctx->GetObjectA(sub_bb.id));
+		}
 	}
 	// To create missing entries in interface_t
-	void decorate(interface_t &data, CKBehavior *bb)
+	void decorate(CKBehavior *bb)
 	{
-		decorate_start(data, bb);
-		decorate_bbs(data, bb);
+		decorate_start(bb);
+		decorate_bbs(bb);
+		recalc_absolute_bb_pos(data.script_root, bb, 0.0, 0.0);
 	}
 
 };
 void decorate(interface_t &data, CKBehavior *bb)
 {
-	Decorator decorator = Decorator();
-	decorator.decorate(data, bb);
+	Decorator decorator = Decorator(data);
+	decorator.decorate(bb);
 }
