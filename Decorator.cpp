@@ -296,11 +296,11 @@ public:
 	}
 	void decorate_bb(bb_t &bb, CKBehavior *beh, int dpt)
 	{
-		calc_bb_size(bb, beh);
 		bb.id = beh->GetID();
 		bb.folded = true;
 		bb.depth = dpt;
 		bb.is_bg = (beh->GetType() != CKBEHAVIORTYPE_BASE);
+		calc_bb_size(bb, beh);
 		for (int i = 0, c = beh->GetInputParameterCount(); i<c; ++i)
 			pins.insert(beh->GetInputParameter(i)->GetID());
 		for (int i = 0, c = beh->GetOutputParameterCount(); i<c; ++i)
