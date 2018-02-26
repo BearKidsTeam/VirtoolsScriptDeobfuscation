@@ -295,7 +295,7 @@ public:
 	map<CK_ID, vertex_t> vertexes;
 	map<CK_ID, int> min_dist;
 	map<CK_ID, rect_t> req_size;
-	map<CK_ID, CK_ID> pre;
+	map<CK_ID, int> pre;
 	map<CK_ID, vector<int> > bridges;
 	struct edge_t {
 		CK_ID from;
@@ -353,7 +353,7 @@ public:
 				if (min_dist.find(to) == min_dist.end())
 				{
 					min_dist[to] = min_dist[from] + 1;
-					pre[to] = from;
+					pre[to] = p;
 					myq.push(to);
 				}
 			}
@@ -362,6 +362,7 @@ public:
 	void get_min_dist(bb_t &bg)
 	{
 		min_dist.clear();
+		pre.clear();
 		min_dist[bg.id] = 0;
 		queue<CK_ID> myq;
 		myq.push(bg.id);
@@ -390,7 +391,7 @@ public:
 		for (int p = vertexes[from].first; p != -1; p = edges[p].next)
 		{
 			CK_ID to = edges[p].to;
-			if (pre[to] == from)
+			if (pre.find(to) != pre.end() && pre[to] == p)
 			{
 				rect_t sub_size = calc_bb_subgraph_size(mappedb(to), false);
 				all_v_size += sub_size.v_size + 20.0 * 2;
@@ -416,7 +417,7 @@ public:
 		for (int p = vertexes[from].first; p != -1; p = edges[p].next)
 		{
 			CK_ID to = edges[p].to;
-			if (pre[to] == from)
+			if (pre.find(to) != pre.end() && pre[to] == p)
 			{
 				rect_t sub_size = req_size[to];
 				place_bb_within(mappedb(to), h_pos + (root ? 20.0 : (bb.size.h_size + 20.0 * 2)), v_pos + all_v_size, false);
