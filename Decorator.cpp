@@ -580,8 +580,8 @@ public:
 			for (int i = 0; i < opcnt; ++i)
 			{
 				op_t &op = mappedop(beh->GetParameterOperation(i)->GetID());
-				op.h_pos += start_h;
-				op.v_pos += start_v;
+				op.h_pos += bb.size.h_pos;
+				op.v_pos += bb.size.v_pos;
 			}
 		}
 	}
