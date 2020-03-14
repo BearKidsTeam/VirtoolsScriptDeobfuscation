@@ -1,5 +1,7 @@
 # Virtools Script Deobfuscation
 
+[中文文档](README_ZH.md)
+
 ## What's this anyway?
 
 This project is the result of some reverse engineering of Virtools.
@@ -48,22 +50,3 @@ parameter types unknown to Virtoos, the resulting script might be
 unusable.
 - Due to a limitation of Virtools, level scripts are currently not
 loaded into the scene.
-
-# Virtools 脚本反混淆
-
-中文readme内容不完整，如果你有能力请阅读英文版。
-
-## 这是什么？
-这是最近对Virtools进行的反向工程一部分成果。它可以将在Virtools中显示为
---Script Hidden--的脚本变回可查看和编辑的形式。
-
-## 原理？
-当启用隐藏脚本选项时，Virtools会丢弃脚本中行为模块的位置和尺寸数据。
-这有些类似于Java的字节码混淆——可以通过一些手段将脚本恢复成人类可读的形态。在这里，
-我们只需要重新生成这些尺寸和位置数据就可以了。
-
-## 注意
-
-- 整个反向工程过程均以Virtools Dev 3.5为对象。本工程对其他Virtools版本可能不适用。
-- 如果脚本中包含Virtools未知的类型的参数，生成的脚本可能无法使用。
-- Level script目前会被无视。
