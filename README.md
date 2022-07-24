@@ -41,7 +41,7 @@ to display the script back. That's it!
 0. You need the SDK component of Virtools Dev 3.5 to build this project
 1. Put everything in Virtools Dev 3.5\Sdk\Samples\Behaviors\Custom
 2. Add Custom.vcxproj to Behaviors.sln
-3. Build with VS2017 under Debug mode
+3. Build with at least VS2017 under Debug mode
 
 ### Parameter
 
