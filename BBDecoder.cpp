@@ -76,6 +76,14 @@ int BBDecoder(const CKBehaviorContext& behcontext)
 		DeleteCKObjectArray(array);
 		throw "fuck";
 	}
+
+	// in files saved with Virtools 3.0+, the Variable Manager setting 
+	// for File Options/Compression is implemented as a File Write Mode, so
+	// the global File Write Mode defaults back to CKFILE_FORVIEWER, and
+	// scripts will be hidden
+	// we correct this by explicity setting the File Write Mode after Loading
+	ctx->SetFileWriteMode((CK_FILE_WRITEMODE)(ctx->GetFileWriteMode() & ~CKFILE_FORVIEWER));
+
 	clock_t c=clock();
 	for (array->Reset(); !array->EndOfList(); array->Next()) {
 		CKObject* o = array->GetData(ctx);
