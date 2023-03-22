@@ -1,13 +1,15 @@
 #include "precomp.h"
 #include "interfaceData.h"
-#include "assert.h"
+#include <cassert>
 #include <map>
 #include <queue>
 #include <set>
 #include <utility>
-extern "C" {
-	extern void __stdcall OutputDebugStringA(_In_opt_ const char* lpOutputString);
-};
+#include <Windows.h>
+
+//extern "C" {
+//	extern void __stdcall OutputDebugStringA(_In_opt_ const char* lpOutputString);
+//};
 void printfdbg(const char* fmt, ...)//print a format string to VS debug output
 {
 	char s[1024];

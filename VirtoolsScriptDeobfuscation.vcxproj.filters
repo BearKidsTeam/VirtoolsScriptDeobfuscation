@@ -15,9 +15,6 @@
     <ClCompile Include="StdAfx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Custom.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="FreeBlock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -33,10 +30,9 @@
     <ClCompile Include="Decorator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Custom.def" />
-    <None Include="res\Custom.rc2" />
+    <ClCompile Include="VirtoolsScriptDeobfuscation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="precomp.h">
@@ -45,5 +41,18 @@
     <ClInclude Include="interfaceData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="VirtoolsScriptDeobfuscation.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="VirtoolsScriptDeobfuscation.def">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
