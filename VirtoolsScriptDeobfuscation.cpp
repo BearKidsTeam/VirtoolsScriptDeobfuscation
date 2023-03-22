@@ -44,15 +44,15 @@ PLUGIN_EXPORT CKPluginInfo* CKGetPluginInfo(int Index)
 
 //	InitVrt();
 
-	g_PluginInfo.m_Author			= "Custom";
-	g_PluginInfo.m_Description		= "Custom building blocks";
+	g_PluginInfo.m_Author			= "BearKidsTeam";
+	g_PluginInfo.m_Description		= "Virtools Script Deobfuscation";
 	g_PluginInfo.m_Extension		= "";
 	g_PluginInfo.m_Type				= CKPLUGIN_BEHAVIOR_DLL;
 	g_PluginInfo.m_Version			= 0x000001;
 	g_PluginInfo.m_InitInstanceFct	= InitInstance;
 	g_PluginInfo.m_ExitInstanceFct	= ExitInstance;
 	g_PluginInfo.m_GUID				= CUSTOM_BEHAVIOR;
-	g_PluginInfo.m_Summary			= "Custom";
+	g_PluginInfo.m_Summary			= "Virtools Script Deobfuscation";
 	return &g_PluginInfo;
 }
 

@@ -21,11 +21,11 @@ CKObjectDeclaration	*FillBBDecoderDecl()
 	od->SetType(CKDLL_BEHAVIORPROTOTYPE);
 	od->SetGuid(CKGUID(0x37543829, 0xf0c3b39));
 	od->SetAuthorGuid(VIRTOOLS_GUID);
-	od->SetAuthorName("Custom");
+	od->SetAuthorName("BearKidsTeam");
 	od->SetVersion(0x00010000);
 	od->SetCreationFunction(CreateBBDecoderProto);
 	od->SetCompatibleClassId(CKCID_BEOBJECT);
-	od->SetCategory("Custom/Misc");
+	od->SetCategory("Custom/VirtoolsScriptDeobfuscation");
 	return od;
 }
 

@@ -20,11 +20,11 @@ CKObjectDeclaration	*FillBehaviorFreeBlockDecl()
 	od->SetType(CKDLL_BEHAVIORPROTOTYPE);
 	od->SetGuid(CKGUID(0x51f76780, 0x6c896f5b));
 	od->SetAuthorGuid(VIRTOOLS_GUID);
-	od->SetAuthorName("Custom");
+	od->SetAuthorName("BearKidsTeam");
 	od->SetVersion(0x00010000);
 	od->SetCreationFunction(CreateFreeBlockProto);
 	od->SetCompatibleClassId(CKCID_BEOBJECT);
-	od->SetCategory("Custom/Misc");
+	od->SetCategory("Custom/VirtoolsScriptDeobfuscation");
 	return od;
 }
 
