@@ -83,6 +83,7 @@
       <BaseAddress>0x25480000</BaseAddress>
       <ImportLibrary>$(OutDir)$(ProjectName).lib</ImportLibrary>
       <TargetMachine>MachineX86</TargetMachine>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
