@@ -7,9 +7,6 @@
 #include <utility>
 #include <Windows.h>
 
-//extern "C" {
-//	extern void __stdcall OutputDebugStringA(_In_opt_ const char* lpOutputString);
-//};
 void printfdbg(const char* fmt, ...)//print a format string to VS debug output
 {
 	char s[1024];

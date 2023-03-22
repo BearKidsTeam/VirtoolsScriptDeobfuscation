@@ -234,16 +234,18 @@ void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file)
 		if (name[i] == '.' || name[i] == '_') continue;
 		name[i] = '_';
 	}
-	sprintf(filename, base_path "/generator/generator_out_%s.log", name);
 	Generator generator = Generator(interface_data);
 	char *buffer = new char[1048576];
 	int length = generator.Generate(buffer);
+#if defined(VSD_ENABLE_LOG)		// yyc mark: only enable logger on Debug config
+	sprintf(filename, "%s/generator_out_%s.log", VSDTempFolderGenerator, name);
 	FILE *fout = fopen(filename, "wb");
 	for (int i = 0; i < length * 4; ++i)
 	{
 		fputc(buffer[i], fout);
 	}
 	fclose(fout);
+#endif
 	extern void parse_string_test(CKBehavior *bb, char *buffer);
 	parse_string_test(bb, buffer);
 	
