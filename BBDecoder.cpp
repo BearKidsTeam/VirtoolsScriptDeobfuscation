@@ -51,6 +51,8 @@ CKERROR CreateBBDecoderProto(CKBehaviorPrototype **pproto)
 
 int BBDecoder(const CKBehaviorContext& behcontext)
 {
+	InitVSDTempFolder(behcontext.Context);	// yyc mark: init dynamic temp folder first.
+
 	interface_t parse_bb_test(CKBehavior *bb, CKFile *file);
 	void decorate(interface_t &data, CKBehavior *bb);
 	void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file);

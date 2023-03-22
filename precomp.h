@@ -4,7 +4,10 @@
 
 #include "VxDefines.h"
 #include "CKAll.h"
-#define base_path "C:\\Users\\jjy\\Desktop\\test"
+
+extern char* VSDTempFolderGenerator;
+extern char* VSDTempFolderParser;
+extern void InitVSDTempFolder(CKContext* ctx);
+extern void FreeVSDTempFolder(void);
+
 extern void printfdbg(const char* fmt,...);
-//#undef min
-//#undef max
