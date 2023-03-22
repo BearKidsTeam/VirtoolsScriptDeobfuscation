@@ -14,7 +14,7 @@ private:
 		size_t needed = this->genbuffer_currsor + size_in_char;
 		if (needed > this->genbuffer_length) {
 			// if ordered buffer too low, allocated 512 DWORD directly
-			needed = std::max(needed, 1024u * sizeof(DWORD));
+			needed = this->genbuffer_currsor + std::max(size_in_char, 1024u * sizeof(DWORD));
 
 			// create new buffer
 			char* newbuf = new char[needed];

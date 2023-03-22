@@ -152,6 +152,7 @@ public:
 		//std::set<std::pair<CK_ID,CK_ID>> pset;
 		std::map<CK_ID, std::vector<pio_pos_t>> pin_chain;
 		std::map<CK_ID, std::vector<pio_pos_t>> pout_chain;
+
 		for (auto&i : pins)
 		{
 			std::vector<pio_pos_t> &vp = pin_chain[i] = std::vector<pio_pos_t>();
@@ -166,7 +167,7 @@ public:
 				lnk_exp.start = link_endpoint_t{ vp.back().id,vp.back().idx,7 };
 				lnk_exp.end = last;
 				last = lnk_exp.start;
-				mappedb(cb->GetID()).links.push_back(lnk_exp);
+				mappedb(cb->GetID()).links.push_back(std::move(lnk_exp));
 				++mappedb(cb->GetID()).n_links;
 			}
 		}
@@ -184,7 +185,7 @@ public:
 				lnk_exp.end = link_endpoint_t{ vp.back().id,vp.back().idx,8 };
 				lnk_exp.start = last;
 				last = lnk_exp.end;
-				mappedb(cb->GetID()).links.push_back(lnk_exp);
+				mappedb(cb->GetID()).links.push_back(std::move(lnk_exp));
 				++mappedb(cb->GetID()).n_links;
 			}
 		}
@@ -209,7 +210,7 @@ public:
 							link_t lnk; lnk.id = 0; lnk.type = 2; lnk.point_count = 0;
 							lnk.start = link_endpoint_t{ bb.id,bb.idx,dsrc->GetClassID() == CKCID_PARAMETERLOCAL ? 9 : 8 };
 							lnk.end=link_endpoint_t{aa.id,aa.idx,aa.idx==-2?10:7};
-							mappedb(aa.lnk_within).links.push_back(lnk);
+							mappedb(aa.lnk_within).links.push_back(std::move(lnk));
 							++mappedb(aa.lnk_within).n_links;
 							conn = true; break;
 						}
@@ -221,7 +222,7 @@ public:
 					pio_pos_t sshp = GetShortcutParamPos(pinp.lnk_within, dsrc->GetID());
 					lnk.start = link_endpoint_t{ pinp.lnk_within,sshp.idx,5 };
 					lnk.end = link_endpoint_t{ pinp.id,pinp.idx,pinp.idx == -2 ? 10 : 7 };
-					mappedb(pinp.lnk_within).links.push_back(lnk);
+					mappedb(pinp.lnk_within).links.push_back(std::move(lnk));
 					++mappedb(pinp.lnk_within).n_links;
 				}
 			}
@@ -240,7 +241,7 @@ public:
 						link_t lnk; lnk.id = 0; lnk.type = 2; lnk.point_count = 0;
 						lnk.start = link_endpoint_t{ bb.id,bb.idx,7 };
 						lnk.end = link_endpoint_t{ aa.id,aa.idx,aa.idx == -2 ? 10 : 7 };
-						mappedb(aa.lnk_within).links.push_back(lnk);
+						mappedb(aa.lnk_within).links.push_back(std::move(lnk));
 						++mappedb(aa.lnk_within).n_links;
 						conn = true; break;
 						}
@@ -268,7 +269,7 @@ public:
 						link_t lnk; lnk.id = 0; lnk.type = 2; lnk.point_count = 0;
 						lnk.start = link_endpoint_t{ aa.id,aa.idx,8 };
 						lnk.end = dendp;
-						mappedb(aa.lnk_within).links.push_back(lnk);
+						mappedb(aa.lnk_within).links.push_back(std::move(lnk));
 						++mappedb(aa.lnk_within).n_links;
 						conn = true; break;
 					}
@@ -280,7 +281,7 @@ public:
 						pio_pos_t sshp = GetShortcutParamPos(ssp.lnk_within, dest->GetID());
 						lnk.start = link_endpoint_t{ ssp.id,ssp.idx,8 };
 						lnk.end = link_endpoint_t{ sshp.id,sshp.idx,5 };
-						mappedb(ssp.lnk_within).links.push_back(lnk);
+						mappedb(ssp.lnk_within).links.push_back(std::move(lnk));
 						++mappedb(ssp.lnk_within).n_links;
 					}
 					else ctx->OutputToConsoleEx("pout: can't connect %d <-> %d, dest type is %d", po->GetID(), dest->GetID(), dest->GetClassID());
@@ -631,7 +632,7 @@ public:
 					lnk.end.index = blink->GetOutBehaviorIO()->GetOwner()->GetOutputPosition(blink->GetOutBehaviorIO());
 					lnk.end.type = 13;
 				}
-				bb.links.push_back(lnk);
+				bb.links.push_back(std::move(lnk));
 			}
 			for (int i = 0, c = beh->GetParameterOperationCount(); i<c; ++i)
 			{
@@ -659,6 +660,7 @@ public:
 		opmap.clear();
 		pins.clear(); 
 		pouts.clear();
+
 		std::queue<std::pair<CKBehavior*, int>> bq;
 		bq.push(std::make_pair(beh, 0));
 		while (!bq.empty())
