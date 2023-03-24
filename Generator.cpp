@@ -304,6 +304,7 @@ void generate_bb_test(interface_t &interface_data, CKBehavior *bb, CKFile *file)
 	}
 	sprintf(filename, "%s/generator_out_%s.log", VSDTempFolderGenerator, name);
 	FILE *fout = fopen(filename, "wb");
+	char* buffer = generator.buffer_getter();
 	for (int i = 0; i < length * 4; ++i)
 	{
 		fputc(buffer[i], fout);

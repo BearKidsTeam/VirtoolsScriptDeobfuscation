@@ -10,7 +10,7 @@
  - BBDecoder  
  一个Object Load的修改版本，它将试图展示所有`--Script Hidden--`的编辑界面
  - FreeBlock  
- 此模块除了帮助反向工程进行以外不能做任何事情。您可以根据需要给它增添任意多个bIO与pIOT
+ 此模块除了帮助反向工程进行以外不能做任何事情。您可以根据需要给它增添任意多个bIO与pIO。
 
 
 ## 它如何工作？
@@ -19,33 +19,63 @@
 
 这个插件做的事情非常简单：重新生成已被丢弃的尺寸和位置数据就可以了。
 
-## 编译
-
-### 编译方法
-
-0. 你需要Virtools Dev 3.5的SDK组件来编译这个项目
-1. 将本项目的所有文件放到`Virtools Dev 3.5\Sdk\Samples\Behaviors\Custom`
-2. 将Custom.vcxproj添加到Behaviors.sln
-3. 使用至少是VS2017的Visual Studio在Debug模式下编译
-
-本工程借用了Virtools SDK自带的示例项目来进行编译，如果需要在别处编译，需要先通读Virtools SDK手册，理解一个Building Block应该如何被编译。然后按手册重新配置项目的附加包含目录和附加库目录等。
-
-### 参数调整
-
-打开`precomp.h`文件，找到如下语句`#define base_path "C:\\Users\\jjy\\Desktop\\test"`
-
-需要修改此宏定义，将其指向到一个认为合适的目录。此目录将存放此插件在执行时的日志文件。此外，需要再选定的目录下新建两个文件夹：`generator`和`parser`，否则脚本执行时会出现IO错误。
-
-如果不修改此宏定义，在Virtools中引用并运行含有此插件的脚本时也会出现IO错误。
-
 ## 运行
 
-新建一个Virtools文件，随意添加一个脚本，拖拽此BB于VSL之上，将脚本起始点与此BB的In 0进行拖拽连接。然后双击编辑仅有的一个Parameter，将其设置为需要进行逆向的文件的地址（需要是可编辑的格式，VMO格式请先使用其它工具转为可编辑文件再执行），然后点击右下角运行脚本即可开始反编译。反编译的结果将即时被写入当前文档。
+新建一个Virtools文件，随意添加一个脚本，拖拽BBDecoder（位于`Custom/VirtoolsScriptDeobfuscation`分类）于Schematic界面之上，将脚本起始点与BBDecoder的In 0进行拖拽连接。然后双击编辑仅有的一个Parameter，将其设置为需要进行逆向的文件的地址（需要是可编辑的格式，VMO格式请先使用其它工具转为可编辑文件再执行），然后点击右下角运行脚本即可开始反编译。反编译的结果将即时被写入当前文档。
 
-注意：无论是在调试此BB还是在使用此BB时，之前在代码参数调整中设置的日志文件存放目录都不可被删除，因此最好选择一个合适的日志存储位置再进行编译。
+## 编译
+
+### 环境
+
+* 你需要Virtools的SDK组件来编译这个项目
+* 至少是Visual Studio 2017。建议使用Visual Studio 2019或2022.
+
+### 快速编译
+
+快速编译法适用于初学者，且仅仅是想使用此工程。
+
+0. 在Virtools SDK目录的示例Behaviors目录下使用Git克隆本项目，例如克隆后的目录：`Virtools Dev 3.5\Sdk\Samples\Behaviors\VirtoolsScriptDeobfuscation`
+1. 复制文件`VirtoolsScriptDeobfuscation.props.template`并重命名为`VirtoolsScriptDeobfuscation.props`
+2. 使用Visual Studio打开`VirtoolsScriptDeobfuscation.sln`。
+3. 在**Release**模式下编译。
+
+### 多目标编译
+
+快速编译法借用了Virtools SDK自带的示例项目来进行编译，如果您不想借用Virtools自带的示例项目，或需要针对不同的Virtools版本进行多目标编译，则需要遵循以下步骤。
+
+0. 在您偏好的位置使用Git克隆本项目。
+1. 复制文件`VirtoolsScriptDeobfuscation.props.template`并重命名为`VirtoolsScriptDeobfuscation.props`
+2. 编辑文件`VirtoolsScriptDeobfuscation.props`，将其中的宏指向正确的位置。
+3. 使用Visual Studio打开`VirtoolsScriptDeobfuscation.sln`。
+4. 在**Release**模式下编译。
+5. 如果还有其它目标需要编译，重复2-4步骤直至所有目标都被编译。
+
+一份`VirtoolsScriptDeobfuscation.props`宏示例如下：
+
+```xml
+<VIRTOOLS_PATH>E:\Virtools\Virtools Dev 5.0</VIRTOOLS_PATH>
+<COMPILE_TEMP_PATH>Temp</COMPILE_TEMP_PATH>
+<VIRTOOLS_INCLUDE_PATH>E:\Virtools\Virtools Dev 5.0\Sdk\Includes</VIRTOOLS_INCLUDE_PATH>
+<VIRTOOLS_LIB_PATH>E:\Virtools\Virtools Dev 5.0\Sdk\Lib\Win32\Release</VIRTOOLS_LIB_PATH>
+```
+
+* VIRTOOLS_PATH：Virtools的安装目录
+* COMPILE_TEMP_PATH：编译期间临时文件存放的文件夹
+* VIRTOOLS_INCLUDE_PATH：Virtools SDK的头文件目录
+* VIRTOOLS_LIB_PATH：Virtools SDK的链接库目录
+
+## 日志与调试
+
+本插件具有日志记录功能，以方便追踪生成的脚本的内部数据。日志功能会消耗IO以及磁盘空间，因此只在**Debug**模式下开启，旨在为开发者调试本插件所用。  
+日志记录功能的启用实际上由编译期间的宏`VSD_ENABLE_LOG`控制。如果您需要，可以直接定义此宏以在其它编译模式中强制开启日志记录功能。
+
+与旧版本不同，新版本插件使用Virtools自带的临时目录去记录日志，其地址不固定，但会被打印在调试窗口以及Virtools日志窗口中，以供开发者查找。  
+这个临时目录在设计上会被Virtools自动清理。但在Virtools崩溃或被Visual Studio强制终止调试时，此目录则不会被清理，需要开发者手动进行清理。
+
+Debug模式下，插件运行速度将会大大降低，请不要将Debug模式编译出的程序用于生产环境。为了减少Debug模式下的运行时间，我们建议您创建最小重现文件。
 
 ## 注意
 
-- 整个反向工程过程均以Virtools Dev 3.5为对象。本工程对其他Virtools版本可能不适用。
+- 整个反向工程过程均以Virtools Dev 3.5为目标。但经过测试，在所有Virtools版本中均可使用。
 - 如果脚本中包含Virtools未知的类型的参数，生成的脚本可能无法使用。
 - Level script目前会被无视。
