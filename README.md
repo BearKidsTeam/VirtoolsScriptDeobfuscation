@@ -41,16 +41,16 @@ Create a new Virtools file and add a script. Then, drag BBDecoder
 Schematic View. Connect script start arrow with BBDecoder's In 0.
 Now, double-click to edit the only Parameter and set it as the file
 which you want to decode and load (Editable format needed. Use tools
-to convert VMO file before executing). At last click Run button at the
-right-bottom corner of Virtools window. The decoded result will be
-written in current document.
+to convert VMO file before executing). At last, click the Run button
+at the right-bottom corner of Virtools window. The decoded result
+will be written in the current document.
 
 ## Build
 
 ### Environment
 
 * You need the SDK component of Virtools to build this project.
-* At least Visual Studio 2017. Visual Studio 2019 and 2022 suggested.
+* At least Visual Studio 2017. Visual Studio 2019 and 2022 are suggested.
 
 ### Quick Build
 
@@ -58,7 +58,7 @@ This method is suit for beginner, especially for who just want to use
 this project.
 
 0. Use Git to clone this repository in the folder of Virtools SDK 
-example Behaviors (eg. 
+example Behaviors (e.g. 
 `Virtools Dev 3.5\Sdk\Samples\Behaviors\VirtoolsScriptDeobfuscation`)
 1. Copy `VirtoolsScriptDeobfuscation.props.template` and rename it
 as `VirtoolsScriptDeobfuscation.props`
@@ -80,7 +80,7 @@ proper values.
 4. Build under **Release** mode.
 5. Repeat step 2 to 4 until all targets has been built.
 
-An example macros defination of `VirtoolsScriptDeobfuscation.props`
+An example macros definition of `VirtoolsScriptDeobfuscation.props`
 is here.
 
 ```xml
@@ -97,12 +97,12 @@ is here.
 
 ## Log and Debug
 
-This plugin have log system tracking the internal data of script. Log
-system will spend IO and disk space. So it is only enabled in **Debug**
-mode in default and served for debugging mainly.  
+This plugin has a log system to track the internal data of the script.
+Log system will spend IO and disk space. So it is only enabled in
+**Debug** mode in default and served for debugging mainly.  
 Log system is actually enabled by macro `VSD_ENABLE_LOG` during
 building. You also can directly define this macro to enable log system
-forcely as you wish.
+forced as you wish.
 
 The difference with old version is that new version use Virtools
 Temporary Folder to log data. This address is dynamic. However, it
@@ -121,7 +121,7 @@ minimalist reproducing file to reduce the time consumption of debugging.
 ## Notice
 
 - The data structures are reverse engineered and tested against Virtools
-Dev 3.5. However after some tests, this plugin may work correctly on
+Dev 3.5. However, after some tests, this plugin may work correctly on
 any Virtools version.
 - Check for missing DLLs before you decode a script. If a script contain
 parameter types unknown to Virtoos, the resulting script might be
