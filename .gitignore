@@ -290,4 +290,6 @@ __pycache__/
 *.odx.cs
 *.xsd.cs
 
-# Virtools SDK
+## JetBrains IDE artifacts
+.idea
+cmake-build-*
