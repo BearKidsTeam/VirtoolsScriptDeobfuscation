@@ -44,7 +44,7 @@ struct link_endpoint_t {
     //26 - "Start" bIn
 
     link_endpoint_t() = default;
-    link_endpoint_t(CK_ID id, int idx, int i) : id(id), index(idx), type(i) {}
+    link_endpoint_t(CK_ID id, int idx, int typ) : id(id), index(idx), type(typ) {}
 };
 
 struct link_t {
@@ -66,7 +66,7 @@ struct comment_t {
     // Ignored
 };
 
-enum param_style_enum {
+enum param_style_type {
     param_style_name = 0x200,
     param_style_closed = 0x400,
     param_style_namevalue = 0x1000,
@@ -77,7 +77,7 @@ struct param_t {
     CK_ID id = -1;
     int h_pos = 0;
     int v_pos = 0;
-    param_style_enum style = param_style_name;
+    param_style_type style = param_style_name;
     CK_ID source_id = -1;
 };
 
