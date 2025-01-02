@@ -7,6 +7,9 @@
 
 #include "InterfaceData.h"
 
+#undef max
+#undef min
+
 class Decorator {
     interface_t &data;
     CKContext *ctx;
@@ -33,11 +36,11 @@ public:
     struct pio_pos_t {
         CK_ID id;
         int idx;
-        CK_ID lnk_within;
+        CK_ID link_within;
     };
 
-    pio_pos_t GetpInPos(CKParameterIn *pin, CKBehavior **owningbeh) {
-        pio_pos_t ret;
+    pio_pos_t GetpInPos(CKParameterIn *pin, CKBehavior **owner) {
+        pio_pos_t ret = {};
         CKObject *ob = pin->GetOwner();
         ret.id = ob->GetID();
         if (ob->GetClassID() == CKCID_BEHAVIOR) {
@@ -45,15 +48,15 @@ public:
             ret.idx = obb->GetInputParameterPosition(pin);
             if (obb->IsUsingTarget() && obb->GetTargetParameter()->GetID() == pin->GetID())
                 ret.idx = -2;
-            *owningbeh = obb->GetParent();
-            ret.lnk_within = (*owningbeh)->GetID();
+            *owner = obb->GetParent();
+            ret.link_within = (*owner)->GetID();
             return ret;
         }
         if (ob->GetClassID() == CKCID_PARAMETEROPERATION) {
             CKParameterOperation *obop = (CKParameterOperation *) ob;
             ret.idx = obop->GetInParameter1()->GetID() == pin->GetID() ? 0 : 1;
-            *owningbeh = obop->GetOwner();
-            ret.lnk_within = (*owningbeh)->GetID();
+            *owner = obop->GetOwner();
+            ret.link_within = (*owner)->GetID();
             return ret;
         }
 
@@ -61,21 +64,21 @@ public:
     }
 
     pio_pos_t GetpOutPos(CKParameterOut *pout, CKBehavior **owningbeh) {
-        pio_pos_t ret;
+        pio_pos_t ret = {};
         CKObject *ob = pout->GetOwner();
         ret.id = ob->GetID();
         if (ob->GetClassID() == CKCID_BEHAVIOR) {
             CKBehavior *obb = (CKBehavior *) ob;
             ret.idx = obb->GetOutputParameterPosition(pout);
             *owningbeh = obb->GetParent();
-            ret.lnk_within = (*owningbeh)->GetID();
+            ret.link_within = (*owningbeh)->GetID();
             return ret;
         }
         if (ob->GetClassID() == CKCID_PARAMETEROPERATION) {
             CKParameterOperation *obop = (CKParameterOperation *) ob;
             ret.idx = 0;
             *owningbeh = obop->GetOwner();
-            ret.lnk_within = (*owningbeh)->GetID();
+            ret.link_within = (*owningbeh)->GetID();
             return ret;
         }
 
@@ -83,24 +86,24 @@ public:
     }
 
     pio_pos_t GetpLocalPos(CKParameterLocal *plocal) {
-        pio_pos_t ret;
+        pio_pos_t ret = {};
         CKObject *ob = plocal->GetOwner();
         assert(ob->GetClassID() == CKCID_BEHAVIOR);
         CKBehavior *obb = (CKBehavior *) ob;
         ret.id = obb->GetID();
         ret.idx = obb->GetLocalParameterPosition(plocal);
-        ret.lnk_within = ret.id;
+        ret.link_within = ret.id;
         return ret;
     }
 
     link_endpoint_t GetParameterEndpoint(CKParameter *p) {
         if (p->GetClassID() == CKCID_PARAMETERLOCAL) {
             pio_pos_t t = GetpLocalPos((CKParameterLocal *) p);
-            return link_endpoint_t{t.id, t.idx, 9};
+            return {t.id, t.idx, 9};
         }
         CKBehavior *dummy;
         pio_pos_t t = GetpOutPos((CKParameterOut *) p, &dummy);
-        return link_endpoint_t{t.id, t.idx, 8};
+        return {t.id, t.idx, 8};
     }
 
     CKBehavior *GetParameterOwnerBehavior(CKParameter *p) {
@@ -120,10 +123,12 @@ public:
     // Get a shortcut for `source` within the behavior `within`.
     // If such shortcut doesn't exist, create it.
     pio_pos_t GetShortcutParamPos(CK_ID within, CK_ID source) {
-        for (int i = 0, c = mappedb(within).n_shared_param; i < c; ++i)
+        for (int i = 0, c = mappedb(within).n_shared_param; i < c; ++i) {
             if (mappedb(within).shared_params[i].source_id == source) {
-                return pio_pos_t{within, i, within};
+                return {within, i, within};
             }
+        }
+
         param_t p;
         p.source_id = source;
         p.h_pos = p.v_pos = 0;
@@ -131,7 +136,7 @@ public:
         p.style = param_style_closed;
         mappedb(within).shared_params.push_back(p);
         ++mappedb(within).n_shared_param;
-        return pio_pos_t{within,mappedb(within).n_shared_param - 1, within};
+        return {within,mappedb(within).n_shared_param - 1, within};
     }
 
     //try reconstructing reasonable plinks...
@@ -142,155 +147,161 @@ public:
     //A: Because a pLink may not belong to parent of the ends.
     //   And cross-behavior pLinks may exist.
     void configure_plink(CKBehavior *root) {
-        //std::set<std::pair<CK_ID,CK_ID>> pset;
-        std::map<CK_ID, std::vector<pio_pos_t> > pin_chain;
-        std::map<CK_ID, std::vector<pio_pos_t> > pout_chain;
-        for (auto &i: pins) {
-            std::vector<pio_pos_t> &vp = pin_chain[i] = std::vector<pio_pos_t>();
-            CKParameterIn *pin = (CKParameterIn *) ctx->GetObjectA(i);
-            CKBehavior *cb;
+        std::map<CK_ID, std::vector<pio_pos_t>> pin_chain;
+        std::map<CK_ID, std::vector<pio_pos_t>> pout_chain;
+        CKBehavior *cb;
+
+        for (auto &id: pins) {
+            auto &vp = pin_chain[id] = {};
+            auto *pin = (CKParameterIn *) ctx->GetObject(id);
             vp.push_back(GetpInPos(pin, &cb));
-            link_endpoint_t last = link_endpoint_t{vp.back().id, vp.back().idx, vp.back().idx == -2 ? 10 : 7};
+            link_endpoint_t last = {vp.back().id, vp.back().idx, vp.back().idx == -2 ? 10 : 7};
             for (; cb && cb->GetInputParameterPosition(pin) != -1; cb = cb->GetParent()) {
-                vp.push_back(pio_pos_t{cb->GetID(), cb->GetInputParameterPosition(pin), cb->GetParent()->GetID()});
-                link_t lnk_exp;
-                lnk_exp.id = 0;
-                lnk_exp.type = 0x10002;
-                lnk_exp.point_count = 0;
-                lnk_exp.start = link_endpoint_t{vp.back().id, vp.back().idx, 7};
-                lnk_exp.end = last;
-                last = lnk_exp.start;
-                mappedb(cb->GetID()).links.push_back(lnk_exp);
+                vp.push_back({cb->GetID(), cb->GetInputParameterPosition(pin), cb->GetParent()->GetID()});
+                link_t link_exp;
+                link_exp.id = 0;
+                link_exp.type = 0x10002;
+                link_exp.point_count = 0;
+                link_exp.start = {vp.back().id, vp.back().idx, 7};
+                link_exp.end = last;
+                last = link_exp.start;
+                mappedb(cb->GetID()).links.push_back(link_exp);
                 ++mappedb(cb->GetID()).n_links;
             }
         }
-        for (auto &i: pouts) {
-            std::vector<pio_pos_t> &vp = pout_chain[i] = std::vector<pio_pos_t>();
-            CKParameterOut *pout = (CKParameterOut *) ctx->GetObjectA(i);
-            CKBehavior *cb;
+
+        for (auto &id: pouts) {
+            std::vector<pio_pos_t> &vp = pout_chain[id] = std::vector<pio_pos_t>();
+            CKParameterOut *pout = (CKParameterOut *) ctx->GetObject(id);
             vp.push_back(GetpOutPos(pout, &cb));
-            link_endpoint_t last = link_endpoint_t{vp.back().id, vp.back().idx, 8};
+            link_endpoint_t last = {vp.back().id, vp.back().idx, 8};
             for (; cb && cb->GetOutputParameterPosition(pout) != -1; cb = cb->GetParent()) {
                 vp.push_back(pio_pos_t{cb->GetID(), cb->GetOutputParameterPosition(pout), cb->GetParent()->GetID()});
-                link_t lnk_exp;
-                lnk_exp.id = 0;
-                lnk_exp.type = 0x10002;
-                lnk_exp.point_count = 0;
-                lnk_exp.end = link_endpoint_t{vp.back().id, vp.back().idx, 8};
-                lnk_exp.start = last;
-                last = lnk_exp.end;
-                mappedb(cb->GetID()).links.push_back(lnk_exp);
+                link_t link_exp;
+                link_exp.id = 0;
+                link_exp.type = 0x10002;
+                link_exp.point_count = 0;
+                link_exp.end = {vp.back().id, vp.back().idx, 8};
+                link_exp.start = last;
+                last = link_exp.end;
+                mappedb(cb->GetID()).links.push_back(link_exp);
                 ++mappedb(cb->GetID()).n_links;
             }
         }
-        for (auto &i: pins) {
-            CKParameterIn *pin = (CKParameterIn *) ctx->GetObjectA(i);
-            CKBehavior *cb;
-            pio_pos_t pinp = GetpInPos(pin, &cb);
+
+        for (auto &id: pins) {
+            CKParameterIn *pin = (CKParameterIn *) ctx->GetObject(id);
+            pio_pos_t pos = GetpInPos(pin, &cb);
             std::vector<pio_pos_t> &vpin = pin_chain[pin->GetID()];
+
             if (pin->GetDirectSource()) {
-                CKParameter *dsrc = pin->GetDirectSource();
-                std::vector<pio_pos_t> &vpsrc = pout_chain[dsrc->GetID()];
-                if (dsrc->GetClassID() == CKCID_PARAMETERLOCAL && vpsrc.empty())
-                    vpsrc.push_back(GetpLocalPos((CKParameterLocal *) dsrc));
+                CKParameter *src = pin->GetDirectSource();
+                std::vector<pio_pos_t> &vpsrc = pout_chain[src->GetID()];
+                if (src->GetClassID() == CKCID_PARAMETERLOCAL && vpsrc.empty())
+                    vpsrc.push_back(GetpLocalPos((CKParameterLocal *) src));
+
                 bool conn = false;
                 for (auto &aa: vpin) {
-                    for (auto &bb: vpsrc)
-                        //direct connection within this behavior
-                        if (aa.lnk_within == bb.lnk_within) {
-                            link_t lnk;
-                            lnk.id = 0;
-                            lnk.type = 2;
-                            lnk.point_count = 0;
-                            lnk.start = link_endpoint_t{
-                                bb.id, bb.idx, dsrc->GetClassID() == CKCID_PARAMETERLOCAL ? 9 : 8
-                            };
-                            lnk.end = link_endpoint_t{aa.id, aa.idx, aa.idx == -2 ? 10 : 7};
-                            mappedb(aa.lnk_within).links.push_back(lnk);
-                            ++mappedb(aa.lnk_within).n_links;
+                    for (auto &bb: vpsrc) {
+                        // direct connection within this behavior
+                        if (aa.link_within == bb.link_within) {
+                            link_t link;
+                            link.id = 0;
+                            link.type = 2;
+                            link.point_count = 0;
+                            link.start = {bb.id, bb.idx, src->GetClassID() == CKCID_PARAMETERLOCAL ? 9 : 8};
+                            link.end = {aa.id, aa.idx, aa.idx == -2 ? 10 : 7};
+                            mappedb(aa.link_within).links.push_back(link);
+                            ++mappedb(aa.link_within).n_links;
                             conn = true;
                             break;
                         }
-                    if (conn)break;
+                    }
+                    if (conn)
+                        break;
                 }
-
-                //still not connected, use a shortcut instead
+                // still not connected, use a shortcut instead
                 if (!conn) {
-                    link_t lnk;
-                    lnk.id = 0;
-                    lnk.type = 2;
-                    lnk.point_count = 0;
-                    pio_pos_t sshp = GetShortcutParamPos(pinp.lnk_within, dsrc->GetID());
-                    lnk.start = link_endpoint_t{pinp.lnk_within, sshp.idx, 5};
-                    lnk.end = link_endpoint_t{pinp.id, pinp.idx, pinp.idx == -2 ? 10 : 7};
-                    mappedb(pinp.lnk_within).links.push_back(lnk);
-                    ++mappedb(pinp.lnk_within).n_links;
+                    link_t link;
+                    link.id = 0;
+                    link.type = 2;
+                    link.point_count = 0;
+                    pio_pos_t sshp = GetShortcutParamPos(pos.link_within, src->GetID());
+                    link.start = {pos.link_within, sshp.idx, 5};
+                    link.end = {pos.id, pos.idx, pos.idx == -2 ? 10 : 7};
+                    mappedb(pos.link_within).links.push_back(link);
+                    ++mappedb(pos.link_within).n_links;
                 }
             } else if (pin->GetSharedSource()) {
                 CKParameterIn *shpin = pin->GetSharedSource();
                 assert(shpin->GetOwner()->GetClassID() == CKCID_BEHAVIOR);
                 std::vector<pio_pos_t> &vshpin = pin_chain[shpin->GetID()];
-                //no shortcut here!
+                // no shortcut here!
                 bool conn = false;
                 for (auto &aa: vpin) {
-                    for (auto &bb: vshpin)
-                        if (aa.lnk_within == bb.id) {
-                            link_t lnk;
-                            lnk.id = 0;
-                            lnk.type = 2;
-                            lnk.point_count = 0;
-                            lnk.start = link_endpoint_t{bb.id, bb.idx, 7};
-                            lnk.end = link_endpoint_t{aa.id, aa.idx, aa.idx == -2 ? 10 : 7};
-                            mappedb(aa.lnk_within).links.push_back(lnk);
-                            ++mappedb(aa.lnk_within).n_links;
+                    for (auto &bb: vshpin) {
+                        if (aa.link_within == bb.id) {
+                            link_t link;
+                            link.id = 0;
+                            link.type = 2;
+                            link.point_count = 0;
+                            link.start = {bb.id, bb.idx, 7};
+                            link.end = {aa.id, aa.idx, aa.idx == -2 ? 10 : 7};
+                            mappedb(aa.link_within).links.push_back(link);
+                            ++mappedb(aa.link_within).n_links;
                             conn = true;
                             break;
                         }
-                    if (conn)break;
+                    }
+                    if (conn)
+                        break;
                 }
                 if (!conn)
                     ctx->OutputToConsoleEx("pin: can't connect %d <-> %d, source type is %d", pin->GetID(), shpin->GetID(), shpin->GetClassID());
             }
         }
-        //up to here we only have pOut->pOut and pOut->pLocal missing
-        //so we iterate through all pOuts
+
+        // up to here we only have pOut->pOut and pOut->pLocal missing
+        // so we iterate through all pOuts
         for (auto &i: pouts) {
-            CKParameterOut *po = (CKParameterOut *) ctx->GetObjectA(i);
-            std::vector<pio_pos_t> &vpout = pout_chain[po->GetID()];
-            for (int j = 0, cd = po->GetDestinationCount(); j < cd; ++j) {
-                CKParameter *dest = po->GetDestination(j);
+            CKParameterOut *pout = (CKParameterOut *) ctx->GetObject(i);
+            std::vector<pio_pos_t> &vpout = pout_chain[pout->GetID()];
+            for (int j = 0, cd = pout->GetDestinationCount(); j < cd; ++j) {
+                CKParameter *dest = pout->GetDestination(j);
                 link_endpoint_t dendp = GetParameterEndpoint(dest);
                 CK_ID dest_within = dest->GetOwner()->GetID();
+
                 bool conn = false;
                 for (auto &aa: vpout)
-                    if (aa.lnk_within == dest_within) {
-                        link_t lnk;
-                        lnk.id = 0;
-                        lnk.type = 2;
-                        lnk.point_count = 0;
-                        lnk.start = link_endpoint_t{aa.id, aa.idx, 8};
-                        lnk.end = dendp;
-                        mappedb(aa.lnk_within).links.push_back(lnk);
-                        ++mappedb(aa.lnk_within).n_links;
+                    if (aa.link_within == dest_within) {
+                        link_t link;
+                        link.id = 0;
+                        link.type = 2;
+                        link.point_count = 0;
+                        link.start = {aa.id, aa.idx, 8};
+                        link.end = dendp;
+                        mappedb(aa.link_within).links.push_back(link);
+                        ++mappedb(aa.link_within).n_links;
                         conn = true;
                         break;
                     }
-                if (!conn)
+                if (!conn) {
                     //when the pOut connects to a shortcut
                     if (dest->GetClassID() == CKCID_PARAMETERLOCAL) {
-                        link_t lnk;
-                        lnk.id = 0;
-                        lnk.type = 2;
-                        lnk.point_count = 0;
+                        link_t link;
+                        link.id = 0;
+                        link.type = 2;
+                        link.point_count = 0;
                         pio_pos_t ssp = vpout.front();
-                        pio_pos_t sshp = GetShortcutParamPos(ssp.lnk_within, dest->GetID());
-                        lnk.start = link_endpoint_t{ssp.id, ssp.idx, 8};
-                        lnk.end = link_endpoint_t{sshp.id, sshp.idx, 5};
-                        mappedb(ssp.lnk_within).links.push_back(lnk);
-                        ++mappedb(ssp.lnk_within).n_links;
+                        pio_pos_t sshp = GetShortcutParamPos(ssp.link_within, dest->GetID());
+                        link.start = {ssp.id, ssp.idx, 8};
+                        link.end = {sshp.id, sshp.idx, 5};
+                        mappedb(ssp.link_within).links.push_back(link);
+                        ++mappedb(ssp.link_within).n_links;
                     } else {
-                        ctx->OutputToConsoleEx("pout: can't connect %d <-> %d, dest type is %d", po->GetID(), dest->GetID(), dest->GetClassID());
+                        ctx->OutputToConsoleEx("pout: can't connect %d <-> %d, dest type is %d", pout->GetID(), dest->GetID(), dest->GetClassID());
                     }
+                }
             }
         }
     }
@@ -327,11 +338,12 @@ public:
     void construct_graph(bb_t &bg, CKBehavior *beh) {
         vertexes.clear();
         edges.clear();
+
         vertexes[beh->GetID()] = vertex_t();
-        int cnt = beh->GetSubBehaviorCount();
-        for (int i = 0; i < cnt; ++i) {
-            CKBehavior *sub_beh = beh->GetSubBehavior(i);
-            vertexes[sub_beh->GetID()] = vertex_t();
+        const int count = beh->GetSubBehaviorCount();
+        for (int i = 0; i < count; ++i) {
+            CKBehavior *subBeh = beh->GetSubBehavior(i);
+            vertexes[subBeh->GetID()] = vertex_t();
         }
 
         // reversed edge insertion
@@ -340,6 +352,7 @@ public:
             if (link.type == 1) // blink
                 add_edge(link.start.id, link.end.id);
         }
+
         CK_ID from = beh->GetID();
         for (auto &kv: vertexes) {
             // A node without input, unconnected graph
@@ -388,7 +401,7 @@ public:
             size.h_size = 0.0f;
             size.v_size = 0.0f;
         }
-        int cnt = 0;
+        int count = 0;
         float all_v_size = 0;
         float all_h_size = 0;
         for (int p = vertexes[from].first; p != -1; p = edges[p].next) {
@@ -397,7 +410,7 @@ public:
                 rect_t sub_size = calc_bb_subgraph_size(mappedb(to), false);
                 all_v_size += sub_size.v_size + 20.0f * 2;
                 all_h_size = std::max(all_h_size, sub_size.h_size);
-                cnt++;
+                count++;
             }
         }
         all_v_size -= 20.0f * 2;
@@ -411,7 +424,7 @@ public:
             bb.size.h_pos = h_pos;
             bb.size.v_pos = v_pos + (req_size[bb.id].v_size - bb.size.v_size) / 2;
         }
-        int cnt = 0;
+        int count = 0;
         float all_v_size = 0;
         CK_ID from = bb.id;
         for (int p = vertexes[from].first; p != -1; p = edges[p].next) {
@@ -420,7 +433,7 @@ public:
                 rect_t sub_size = req_size[to];
                 place_bb_within(mappedb(to), h_pos + (root ? 20.0f : bb.size.h_size + 20.0f * 2), v_pos + all_v_size, false);
                 all_v_size += sub_size.v_size + 20.0f * 2;
-                cnt++;
+                count++;
             }
         }
         all_v_size -= 20.0f * 2;
@@ -528,9 +541,11 @@ public:
         if (bb.depth > 0) {
             int height = std::max(beh->GetOutputCount(), beh->GetInputCount());
             height = std::max(height, 1);
+
             int width = std::max(beh->GetOutputParameterCount(), beh->GetInputParameterCount());
             width = std::max(width, int((strlen(beh->GetName()) - 1) / 2.5) + 1);
             width = std::max(width, 2);
+
             bb.size.h_size = (float) width * 20.0f;
             bb.size.v_size = (float) height * 20.0f;
             if (bb.is_bg) {
@@ -548,12 +563,13 @@ public:
         bb.size.h_pos += start_h;
         bb.size.v_pos += start_v;
         if (bb.is_bg) {
-            int cnt = beh->GetSubBehaviorCount();
-            for (int i = 0; i < cnt; ++i) {
+            const int count = beh->GetSubBehaviorCount();
+            for (int i = 0; i < count; ++i) {
                 CKBehavior *sub_beh = beh->GetSubBehavior(i);
                 recalc_absolute_bb_pos(mappedb(sub_beh->GetID()), sub_beh, bb.size.h_pos, bb.size.v_pos);
             }
-            int opCount = beh->GetParameterOperationCount();
+
+            const int opCount = beh->GetParameterOperationCount();
             for (int i = 0; i < opCount; ++i) {
                 op_t &op = mappedop(beh->GetParameterOperation(i)->GetID());
                 op.h_pos += bb.size.h_pos;
@@ -562,62 +578,78 @@ public:
         }
     }
 
-    void decorate_bb(bb_t &bb, CKBehavior *beh, int dpt) {
+    void decorate_bb(bb_t &bb, CKBehavior *beh, int depth) {
         bb.id = beh->GetID();
         bb.folded = true;
-        bb.depth = dpt;
+        bb.depth = depth;
         bb.is_bg = beh->GetType() != CKBEHAVIORTYPE_BASE;
+
         calc_bb_size(bb, beh);
+
         for (int i = 0, c = beh->GetInputParameterCount(); i < c; ++i)
             pins.insert(beh->GetInputParameter(i)->GetID());
+
         for (int i = 0, c = beh->GetOutputParameterCount(); i < c; ++i)
             pouts.insert(beh->GetOutputParameter(i)->GetID());
+
         if (beh->IsUsingTarget())
             pins.insert(beh->GetTargetParameter()->GetID());
+
         for (int i = 0, c = beh->GetParameterOperationCount(); i < c; ++i) {
-            pins.insert(beh->GetParameterOperation(i)->GetInParameter1()->GetID());
-            pins.insert(beh->GetParameterOperation(i)->GetInParameter2()->GetID());
-            pouts.insert(beh->GetParameterOperation(i)->GetOutParameter()->GetID());
+            CKParameterOperation *op = beh->GetParameterOperation(i);
+            pins.insert(op->GetInParameter1()->GetID());
+            pins.insert(op->GetInParameter2()->GetID());
+            pouts.insert(op->GetOutParameter()->GetID());
         }
+
         if (bb.is_bg) {
             for (int i = 0, c = beh->GetSubBehaviorLinkCount(); i < c; ++i) {
-                link_t lnk;
-                lnk.type = 1;
                 CKBehaviorLink *blink = beh->GetSubBehaviorLink(i);
-                lnk.id = blink->GetID();
-                lnk.point_count = 0;
-                lnk.start = lnk.end = link_endpoint_t();
 
-                lnk.start.id = blink->GetInBehaviorIO()->GetOwner()->GetID();
-                lnk.start.type = 13;
-                lnk.start.index = blink->GetInBehaviorIO()->GetOwner()->GetOutputPosition(blink->GetInBehaviorIO());
-                if (!~lnk.start.index) {
-                    lnk.start.index = blink->GetInBehaviorIO()->GetOwner()->GetInputPosition(blink->GetInBehaviorIO());
-                    lnk.start.type = 12;
-                    if (blink->GetInBehaviorIO()->GetOwner()->GetType() == CKBEHAVIORTYPE_SCRIPT)
-                        lnk.start.type = 26;
+                link_t link;
+                link.type = 1;
+                link.id = blink->GetID();
+                link.point_count = 0;
+                link.start = link.end = link_endpoint_t();
+
+                CKBehaviorIO *inIO = blink->GetInBehaviorIO();
+                CKBehavior *inBeh = inIO->GetOwner();
+                link.start.id = inBeh->GetID();
+                link.start.type = 13;
+                link.start.index = inBeh->GetOutputPosition(inIO);
+                if (!~link.start.index) {
+                    link.start.index = inBeh->GetInputPosition(inIO);
+                    link.start.type = 12;
+                    if (inBeh->GetType() == CKBEHAVIORTYPE_SCRIPT)
+                        link.start.type = 26;
                 }
 
-                lnk.end.id = blink->GetOutBehaviorIO()->GetOwner()->GetID();
-                lnk.end.type = 12;
-                lnk.end.index = blink->GetOutBehaviorIO()->GetOwner()->GetInputPosition(blink->GetOutBehaviorIO());
-                if (!~lnk.end.index) {
-                    lnk.end.index = blink->GetOutBehaviorIO()->GetOwner()->GetOutputPosition(blink->GetOutBehaviorIO());
-                    lnk.end.type = 13;
+                CKBehaviorIO *outIO = blink->GetOutBehaviorIO();
+                CKBehavior *outBeh = outIO->GetOwner();
+                link.end.id = outBeh->GetID();
+                link.end.type = 12;
+                link.end.index = outBeh->GetInputPosition(outIO);
+                if (!~link.end.index) {
+                    link.end.index = outBeh->GetOutputPosition(outIO);
+                    link.end.type = 13;
                 }
-                bb.links.push_back(lnk);
+
+                bb.links.push_back(link);
             }
+
             for (int i = 0, c = beh->GetParameterOperationCount(); i < c; ++i) {
-                op_t op = {};
                 CKParameterOperation *pop = beh->GetParameterOperation(i);
+
+                op_t op;
                 op.id = pop->GetID();
                 bb.ops.push_back(op);
             }
             bb.n_ops = bb.ops.size();
+
             for (int i = 0, c = beh->GetLocalParameterCount(); i < c; ++i) {
-                param_t p;
-                p.h_pos = p.v_pos = 0;
                 CKParameterLocal *pl = beh->GetLocalParameter(i);
+
+                param_t p;
                 p.id = pl->GetID();
                 p.style = param_style_closed;
                 bb.local_params.push_back(p);
@@ -633,36 +665,45 @@ public:
         opmap.clear();
         pins.clear();
         pouts.clear();
-        std::queue<std::pair<CKBehavior *, int> > bq;
+
+        std::queue<std::pair<CKBehavior *, int>> bq;
         bq.emplace(beh, 0);
         while (!bq.empty()) {
-            CKBehavior *cur = bq.front().first;
-            int cdpt = bq.front().second;
+            CKBehavior *beh = bq.front().first;
+            const int depth = bq.front().second;
             bq.pop();
-            if (cdpt) {
+
+            if (depth > 0) {
                 data.bbs.emplace_back();
                 ++data.n_bb;
             }
-            bmap[cur->GetID()] = cdpt ? data.bbs.size() - 1 : -1;
-            int opcnt = cur->GetParameterOperationCount();
-            for (int i = 0; i < opcnt; ++i) {
-                CKParameterOperation *op = cur->GetParameterOperation(i);
-                opmap[op->GetID()] = std::make_pair(cdpt ? data.bbs.size() - 1 : -1, i);
+
+            bmap[beh->GetID()] = depth > 0 ? data.bbs.size() - 1 : -1;
+            const int opCount = beh->GetParameterOperationCount();
+            for (int i = 0; i < opCount; ++i) {
+                CKParameterOperation *op = beh->GetParameterOperation(i);
+                opmap[op->GetID()] = std::make_pair(depth > 0 ? data.bbs.size() - 1 : -1, i);
             }
-            decorate_bb(cdpt ? data.bbs.back() : data.script_root, cur, cdpt);
-            int cnt = cur->GetSubBehaviorCount();
-            for (int i = 0; i < cnt; ++i) {
-                CKBehavior *sub_bb = cur->GetSubBehavior(i);
-                bq.emplace(sub_bb, cdpt + 1);
+
+            bb_t &bb = depth > 0 ? data.bbs.back() : data.script_root;
+            decorate_bb(bb, beh, depth);
+
+            const int count = beh->GetSubBehaviorCount();
+            for (int i = 0; i < count; ++i) {
+                CKBehavior *subBeh = beh->GetSubBehavior(i);
+                bq.emplace(subBeh, depth + 1);
             }
         }
+
         configure_plink(beh);
+
         for (auto &kv: bmap) {
             bb_t &sub_bb = mappedb(kv.first);
             if (sub_bb.is_bg) {
                 calc_bb_positions(mappedb(kv.first), (CKBehavior *) ctx->GetObjectA(sub_bb.id), sub_bb.depth == 0);
             }
         }
+
         for (auto &kv: bmap) {
             bb_t &sub_bb = mappedb(kv.first);
             if (sub_bb.is_bg) {
