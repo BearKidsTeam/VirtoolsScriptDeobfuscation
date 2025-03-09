@@ -416,26 +416,3 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorBlock &behaviorG
         }
     }
 }
-
-void LayoutCalculator::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
-    if (behaviorBlock.depth > 0) {
-        // Calculate height based on max of inputs and outputs
-        int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
-        height = std::max(height, 1);
-
-        // Calculate width based on max of input and output parameters, or name length
-        int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
-        width = std::max(width, int((strlen(behavior->GetName()) - 1) / 2.5) + 1);
-        width = std::max(width, 2);
-
-        // Set size
-        behaviorBlock.size.hSize = (float) width * 20.0f;
-        behaviorBlock.size.vSize = (float) height * 20.0f;
-
-        // Set expanded size for behavior graphs
-        if (behaviorBlock.isBehaviorGraph) {
-            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10;
-            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10;
-        }
-    }
-}

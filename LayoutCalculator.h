@@ -180,11 +180,4 @@ private:
      * @param isInputDirection Direction (true for inputs, false for outputs)
      */
     void CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
-
-    /**
-     * Calculates the size of a behavior
-     * @param behaviorBlock Behavior
-     * @param behavior CK behavior
-     */
-    void CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior);
 };
