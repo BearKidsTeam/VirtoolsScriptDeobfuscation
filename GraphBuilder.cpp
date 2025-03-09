@@ -179,18 +179,24 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
 
 void GraphBuilder::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
     if (behaviorBlock.depth > 0) {
+        // Calculate height based on max of inputs and outputs
         int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
         height = std::max(height, 1);
 
+        // Calculate width based on parameters and name length
         int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
-        width = std::max(width, int((strlen(behavior->GetName()) - 1) / 2.5) + 1);
+        const char *name = behavior->GetName();
+        width = std::max(width, static_cast<int>(((name ? strlen(name) : 0) - 1) / 2.5 + 1));
         width = std::max(width, 2);
 
-        behaviorBlock.size.hSize = (float) width * 20.0f;
-        behaviorBlock.size.vSize = (float) height * 20.0f;
+        // Set size
+        behaviorBlock.size.hSize = static_cast<float>(width) * 20.0f;
+        behaviorBlock.size.vSize = static_cast<float>(height) * 20.0f;
+
+        // Set expanded size for behavior graphs
         if (behaviorBlock.isBehaviorGraph) {
-            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10;
-            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10;
+            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10.0f;
+            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10.0f;
         }
     }
 }
