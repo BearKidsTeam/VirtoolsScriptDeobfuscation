@@ -9,6 +9,8 @@
 
 #include <MinHook.h>
 
+#include "Decorator.h"
+
 #define READER_COUNT 4
 
 /*************************************************************************
@@ -215,8 +217,6 @@ CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *l
     return CK_OK;
 }
 
-extern void decorate(interface_t &data, CKBehavior *bb);
-
 CKERROR NemoLoader::GenerateInterfaceChunk(SchematicNode &node) {
     if (!node.behavior)
         return CKERR_INVALIDPARAMETER;
@@ -224,7 +224,7 @@ CKERROR NemoLoader::GenerateInterfaceChunk(SchematicNode &node) {
     CKContext *context = node.behavior->GetCKContext();
 
     interface_t data = {};
-    decorate(data, node.behavior);
+    Decorate(data, node.behavior);
 
     CKStateChunk *chunk = CreateCKStateChunk(-1);
     node.chunk = chunk;
@@ -235,7 +235,7 @@ CKERROR NemoLoader::GenerateInterfaceChunk(SchematicNode &node) {
     chunk->StartWrite();
 
     chunk->WriteIdentifier(1);
-    chunk->WriteInt(node.version);
+    chunk->WriteDword(node.version);
     const int count = data.n_bb + 1;
     chunk->WriteInt(count);
 

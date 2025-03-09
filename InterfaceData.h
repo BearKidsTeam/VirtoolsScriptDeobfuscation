@@ -1,5 +1,8 @@
 #pragma once
+
 #include <vector>
+
+#include "CKDefines.h"
 
 struct rect_t {
     float h_pos = 300.0f;
@@ -22,7 +25,7 @@ struct point_t {
 };
 
 struct start_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     float v_start = 0.0f;
     float h_start_pos = 140.0f;
     float v_start_pos = 0.0f;
@@ -30,7 +33,7 @@ struct start_t {
 };
 
 struct link_endpoint_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     int index = 0;
     int type = 0;
     //types:
@@ -48,7 +51,7 @@ struct link_endpoint_t {
 };
 
 struct link_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     int type = 0; // 1: g_ColorIndexBlack, 2: g_ColorIndexRed
     link_endpoint_t start;
     int point_count;
@@ -57,7 +60,7 @@ struct link_t {
 };
 
 struct op_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     float h_pos = 0.0f;
     float v_pos = 0.0f;
 };
@@ -74,7 +77,7 @@ enum param_style_type {
 };
 
 struct param_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     int h_pos = 0;
     int v_pos = 0;
     param_style_type style = param_style_name;
@@ -82,7 +85,7 @@ struct param_t {
 };
 
 struct bb_t {
-    CK_ID id = -1;
+    CK_ID id = 0;
     bool folded = false;
     int depth = 0;
     rect_t size;

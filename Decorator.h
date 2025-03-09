@@ -1,0 +1,320 @@
+#pragma once
+
+#include <map>
+#include <queue>
+#include <set>
+#include <utility>
+
+#include "InterfaceData.h"
+
+class CKContext;
+class CKBehavior;
+class CKParameterIn;
+class CKParameterOut;
+class CKParameterLocal;
+class CKParameter;
+class CKParameterOperation;
+
+/**
+ * Decorator transforms a behavior tree into a visual representation
+ * that can be rendered in the UI.
+ */
+class Decorator {
+public:
+    /**
+     * Constructor
+     * @param target_data Reference to the interface data to populate
+     * @param context Pointer to the CK context
+     */
+    Decorator(interface_t &target_data, CKContext *context);
+
+    /**
+     * Sets start information for the behavior script
+     * @param script The script behavior
+     * @param verticalStartPos Vertical start position
+     * @param verticalSize Vertical size
+     */
+    void DecorateStart(bb_t &script, float verticalStartPos, float verticalSize);
+
+    /**
+     * Decorates a behavior tree, populating the interface data
+     * @param script The root behavior to decorate
+     */
+    void Decorate(CKBehavior *script);
+
+private:
+    // Reference to the interface data
+    interface_t &m_data;
+
+    // Pointer to the CK context
+    CKContext *m_context;
+
+    // Maximum fix stack operations
+    static const int MAX_FIX_STACK_OPS = 3;
+
+    // Maps to track object relationships
+    std::map<CK_ID, int> m_behaviorMap;                  // Maps behavior ID to index in bbs array
+    std::map<CK_ID, std::pair<int, int>> m_operationMap; // Maps operation ID to <bb index, op index>
+
+    // Sets to track parameters
+    std::set<CK_ID> m_inputParams;  // Input parameter IDs
+    std::set<CK_ID> m_outputParams; // Output parameter IDs
+    std::set<CK_ID> m_movedOperations;
+
+    /**
+     * Gets a behavior block by ID
+     * @param id Behavior ID
+     * @return Reference to the behavior block
+     */
+    bb_t &GetBehaviorBlock(CK_ID id);
+
+    /**
+     * Gets an operation by ID
+     * @param id Operation ID
+     * @return Reference to the operation
+     */
+    op_t &GetOperation(CK_ID id);
+
+    //------------------------------------------------------------------
+    // Parameter-related types and methods
+    //------------------------------------------------------------------
+
+    /**
+     * Structure to represent a parameter IO position
+     */
+    struct ParameterPosition {
+        CK_ID id;         // Parameter ID
+        int index;        // Parameter index
+        CK_ID behaviorId; // Parent behavior ID
+    };
+
+    /**
+     * Gets the position information for an input parameter
+     * @param inputParam Input parameter
+     * @param owner Output: Owner behavior
+     * @return Position information
+     */
+    ParameterPosition GetInputParameterPosition(CKParameterIn *inputParam, CKBehavior **owner);
+
+    /**
+     * Gets the position information for an output parameter
+     * @param outputParam Output parameter
+     * @param ownerBehavior Output: Owner behavior
+     * @return Position information
+     */
+    ParameterPosition GetOutputParameterPosition(CKParameterOut *outputParam, CKBehavior **ownerBehavior);
+
+    /**
+     * Gets the position information for a local parameter
+     * @param localParam Local parameter
+     * @return Position information
+     */
+    ParameterPosition GetLocalParameterPosition(CKParameterLocal *localParam);
+
+    /**
+     * Gets the link endpoint information for a parameter
+     * @param parameter Parameter
+     * @return Link endpoint
+     */
+    link_endpoint_t GetParameterEndpoint(CKParameter *parameter);
+
+    /**
+     * Gets the owner behavior of a parameter
+     * @param parameter Parameter
+     * @return Owner behavior
+     */
+    CKBehavior *GetParameterOwnerBehavior(CKParameter *parameter);
+
+    /**
+     * Gets a shortcut parameter position
+     * @param behaviorId Parent behavior ID
+     * @param sourceId Source parameter ID
+     * @return Parameter position
+     */
+    ParameterPosition GetShortcutParameterPosition(CK_ID behaviorId, CK_ID sourceId);
+
+    /**
+     * Configures parameter links for a behavior tree
+     * @param root Root behavior
+     */
+    void ConfigureParameterLinks(CKBehavior *root);
+
+    //------------------------------------------------------------------
+    // Graph structure and layout
+    //------------------------------------------------------------------
+
+    /**
+     * Vertex structure for graph representation
+     */
+    struct Vertex {
+        int incomingEdgeCount = 0; // Number of incoming edges
+        int firstEdgeIndex = -1;   // First edge index
+    };
+
+    /**
+     * Edge structure for graph representation
+     */
+    struct Edge {
+        CK_ID sourceId;         // Source node ID
+        CK_ID targetId;         // Target node ID
+        int nextEdgeIndex = -1; // Next edge index from the same source
+    };
+
+    // Graph state
+    std::map<CK_ID, Vertex> m_vertices;
+    std::map<CK_ID, int> m_distanceFromRoot;
+    std::map<CK_ID, rect_t> m_requiredSize;
+    std::map<CK_ID, int> m_predecessorEdge;
+    std::map<CK_ID, std::vector<int>> m_bridges;
+    std::vector<Edge> m_edges;
+
+    /**
+     * Adds an edge to the graph
+     * @param sourceId Source node ID
+     * @param targetId Target node ID
+     */
+    void AddGraphEdge(CK_ID sourceId, CK_ID targetId);
+
+    /**
+     * Constructs a graph representation of the behavior
+     * @param behaviorGraph Behavior graph
+     * @param behavior Behavior
+     */
+    void ConstructGraph(bb_t &behaviorGraph, CKBehavior *behavior);
+
+    /**
+     * Helper for calculating minimum distances in the graph
+     * @param nodeQueue Queue of nodes to process
+     */
+    void CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue);
+
+    /**
+     * Calculates minimum distances from the root
+     * @param behaviorGraph Behavior graph
+     */
+    void CalculateGraphDistances(bb_t &behaviorGraph);
+
+    /**
+     * Calculates the size of a subgraph
+     * @param behaviorBlock Behavior building block
+     * @param isRoot Whether this is the root node
+     * @return Size rectangle
+     */
+    rect_t CalculateSubgraphSize(bb_t &behaviorBlock, bool isRoot);
+
+    /**
+     * Places a behavior within its parent
+     * @param behaviorBlock Behavior building block
+     * @param horizontalPos Horizontal position
+     * @param verticalPos Vertical position
+     * @param isRoot Whether this is the root node
+     */
+    void PlaceBehaviorInParent(bb_t &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot);
+
+    /**
+     * Calculates positions for behaviors in the graph
+     * @param behaviorGraph Behavior graph
+     * @param behavior Behavior
+     * @param isScript Whether the behavior is a script
+     * @return Vertical center position
+     */
+    float CalculateBehaviorPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isScript);
+
+    //------------------------------------------------------------------
+    // Visual property calculation
+    //------------------------------------------------------------------
+
+    /**
+     * Moves a parameter to a position
+     * @param parameter Parameter
+     * @param position Position
+     */
+    void MoveParameterToPosition(param_t &parameter, point_t position);
+
+    /**
+     * Moves an operation to a position
+     * @param operation Operation
+     * @param position Position
+     */
+    void MoveOperationToPosition(op_t &operation, point_t position);
+
+    /**
+     * Gets the input position for an interface
+     * @param targetId Target ID
+     * @param inputIndex Input position
+     * @return Point
+     */
+    point_t GetInterfaceInputPosition(CK_ID targetId, int inputIndex);
+
+    /**
+     * Gets the output position for an interface
+     * @param targetId Target ID
+     * @param outputIndex Output position
+     * @return Point
+     */
+    point_t GetInterfaceOutputPosition(CK_ID targetId, int outputIndex);
+
+    /**
+     * Checks if an ID is an operation
+     * @param id ID to check
+     * @return True if ID is an operation
+     */
+    bool IsOperation(CK_ID id);
+
+    /**
+     * Calculates positions for operations
+     * @param behaviorGraph Behavior graph
+     * @param behavior Behavior
+     */
+    void CalculateOperationPositions(bb_t &behaviorGraph, CKBehavior *behavior);
+
+    /**
+     * Calculates positions for local parameters
+     * @param behaviorGraph Behavior graph
+     * @param behavior Behavior
+     * @param isInputDirection Direction (true for inputs, false for outputs)
+     */
+    void CalculateLocalParameterPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
+
+    /**
+     * Calculates the size of a behavior
+     * @param behaviorBlock Behavior
+     * @param behavior CK behavior
+     */
+    void CalculateBehaviorSize(bb_t &behaviorBlock, CKBehavior *behavior);
+
+    /**
+     * Recalculates absolute positions for behaviors
+     * @param behaviorBlock Behavior
+     * @param behavior CK behavior
+     * @param startHorizontal Starting horizontal position
+     * @param startVertical Starting vertical position
+     */
+    void RecalculateAbsolutePositions(bb_t &behaviorBlock, CKBehavior *behavior, float startHorizontal,
+                                      float startVertical);
+
+    //------------------------------------------------------------------
+    // Behavior decoration
+    //------------------------------------------------------------------
+
+    /**
+     * Decorates a single behavior
+     * @param behaviorBlock Behavior building block
+     * @param behavior CK behavior
+     * @param depth Depth in the tree
+     */
+    void DecorateBehavior(bb_t &behaviorBlock, CKBehavior *behavior, int depth);
+
+    /**
+     * Decorates all behaviors in the tree
+     * @param rootBehavior Root behavior
+     */
+    void DecorateBehaviorTree(CKBehavior *rootBehavior);
+};
+
+/**
+ * Global function to decorate a behavior
+ * @param data Interface data
+ * @param behavior Behavior to decorate
+ */
+void Decorate(interface_t &data, CKBehavior *behavior);
