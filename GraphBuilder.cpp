@@ -3,6 +3,9 @@
 
 #include <queue>
 
+#undef min
+#undef max
+
 GraphBuilder::GraphBuilder(InterfaceData &target_data, CKContext *context)
     : m_Data(target_data), m_Context(context) {}
 
@@ -82,7 +85,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 
 void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth) {
     behaviorBlock.id = behavior->GetID();
-    behaviorBlock.folded = true;
+    behaviorBlock.folded = depth > 0;
     behaviorBlock.depth = depth;
     behaviorBlock.isBehaviorGraph = behavior->GetType() != CKBEHAVIORTYPE_BASE;
 
