@@ -34,8 +34,8 @@ public:
     CKERROR Load(CKContext *context, CKSTRING FileName, CKObjectArray *liste, CKDWORD LoadFlags, CKCharacter *carac) override;
     CKERROR Save(CKContext *context, CKSTRING FileName, CKObjectArray *liste, CKDWORD SaveFlags) override;
 
-    CKERROR GenerateInterfaceChunks(CKContext *context, CKObjectArray *list);
-    CKERROR GenerateInterfaceChunk(CKBehavior* behavior);
+    CKERROR CreateInterfaceChunks(CKContext *context, CKObjectArray *list);
+    CKERROR CreateInterfaceChunk(CKBehavior* behavior);
 };
 
 #endif // PLUGINS_NEMOLOADER_H

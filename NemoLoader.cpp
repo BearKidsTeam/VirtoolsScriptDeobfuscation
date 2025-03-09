@@ -166,7 +166,7 @@ CKERROR NemoLoader::Load(CKContext *context, CKSTRING FileName, CKObjectArray *l
         return err;
     }
 
-    GenerateInterfaceChunks(context, liste);
+    CreateInterfaceChunks(context, liste);
 
     file->UpdateAndApplyAnimationsTo(carac);
     context->DeleteCKFile(file);
@@ -189,7 +189,7 @@ CKERROR NemoLoader::Save(CKContext *context, CKSTRING FileName, CKObjectArray *l
     return err;
 }
 
-CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *list) {
+CKERROR NemoLoader::CreateInterfaceChunks(CKContext *context, CKObjectArray *list) {
     if (!list)
         return CKERR_INVALIDPARAMETER;
 
@@ -202,7 +202,7 @@ CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *l
             CKBehavior *beh = (CKBehavior *) list->GetData(context);
             if (beh->GetType() & CKBEHAVIORTYPE_SCRIPT) {
                 if (!beh->GetInterfaceChunk()) {
-                    err = GenerateInterfaceChunk(beh);
+                    err = CreateInterfaceChunk(beh);
                     if (err == CK_OK) {
                         context->OutputToConsoleEx("Generated interface chunk for <%s>", beh->GetName());
                     } else {
@@ -218,7 +218,7 @@ CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *l
     return CK_OK;
 }
 
-CKERROR NemoLoader::GenerateInterfaceChunk(CKBehavior *beh) {
+CKERROR NemoLoader::CreateInterfaceChunk(CKBehavior *beh) {
     if (!beh)
         return CKERR_INVALIDPARAMETER;
 
@@ -228,17 +228,11 @@ CKERROR NemoLoader::GenerateInterfaceChunk(CKBehavior *beh) {
     // Decorate the behavior
     Decorate(interfaceData, beh);
 
-    // Fill the schematic node with needed information
-    SchematicNode node;
-    node.behavior = beh;
-
-    // Generate the interface chunk
-    CKERROR err = interfaceData.GenerateInterfaceChunk(node);
-    if (err != CK_OK) {
-        return err;
+    CKStateChunk *chunk = GenerateInterfaceChunk(interfaceData, beh);
+    if (!chunk) {
+        return CKERR_INVALIDPARAMETER;
     }
 
-    beh->SetInterfaceChunk(node.chunk);
-
+    beh->SetInterfaceChunk(chunk);
     return CK_OK;
 }
