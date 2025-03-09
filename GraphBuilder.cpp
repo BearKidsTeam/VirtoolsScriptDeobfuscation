@@ -181,13 +181,21 @@ void GraphBuilder::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavio
     if (behaviorBlock.depth > 0) {
         // Calculate height based on max of inputs and outputs
         int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
-        height = std::max(height, 1);
+        if (height < 1) {
+            height = 1;
+        }
 
         // Calculate width based on parameters and name length
         int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
         const char *name = behavior->GetName();
-        width = std::max(width, static_cast<int>(((name ? strlen(name) : 0) - 1) / 2.5 + 1));
-        width = std::max(width, 2);
+        const size_t nameLength = name ? strlen(name) : 0;
+        const int nameWidth = static_cast<int>(std::floor(nameLength * 0.4 + 1));
+        if (nameWidth > width) {
+            width = nameWidth;
+        }
+        if (width < 2) {
+            width = 2;
+        }
 
         // Set size
         behaviorBlock.size.hSize = static_cast<float>(width) * 20.0f;
