@@ -151,7 +151,7 @@ private:
     void ConfigureParameterLinks(CKBehavior *root);
 
     /**
-     * Creates a chain of links for output parameters
+     * Connects input parameters to their sources
      * @param inputChain Chain of input parameters
      * @param outputChain Chain of output parameters
      */

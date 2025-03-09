@@ -11,39 +11,6 @@
 GraphBuilder::GraphBuilder(InterfaceData &target_data, CKContext *context)
     : m_Data(target_data), m_Context(context) {}
 
-BehaviorBlock &GraphBuilder::GetBehaviorBlock(CK_ID id) {
-    int index = m_BehaviorMap[id];
-    return (index >= 0) ? m_Data.behaviorBlocks[index] : m_Data.scriptRoot;
-}
-
-Operation &GraphBuilder::GetOperation(CK_ID id) {
-    auto &opInfo = m_OperationMap[id];
-    int bbIndex = opInfo.first;
-    int opIndex = opInfo.second;
-
-    BehaviorBlock *block = nullptr;
-    if (bbIndex >= 0) {
-        if (bbIndex < static_cast<int>(m_Data.behaviorBlocks.size())) {
-            block = &m_Data.behaviorBlocks[bbIndex];
-        }
-    } else {
-        block = &m_Data.scriptRoot;
-    }
-
-    if (block && opIndex >= 0 && opIndex < block->operationCount) {
-        return block->operations[opIndex];
-    }
-
-    // If not found, log and throw
-    m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation %d not found", id);
-    throw std::runtime_error("Operation not found");
-}
-
-bool GraphBuilder::IsOperation(CK_ID id) const {
-    CKObject *obj = m_Context->GetObject(id);
-    return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
-}
-
 void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     // Initialize data structures
     m_Data.Clear();
@@ -106,6 +73,39 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 
     // Configure parameter links
     ConfigureParameterLinks(rootBehavior);
+}
+
+BehaviorBlock &GraphBuilder::GetBehaviorBlock(CK_ID id) {
+    int index = m_BehaviorMap[id];
+    return (index >= 0) ? m_Data.behaviorBlocks[index] : m_Data.scriptRoot;
+}
+
+Operation &GraphBuilder::GetOperation(CK_ID id) {
+    auto &opInfo = m_OperationMap[id];
+    int bbIndex = opInfo.first;
+    int opIndex = opInfo.second;
+
+    BehaviorBlock *block = nullptr;
+    if (bbIndex >= 0) {
+        if (bbIndex < static_cast<int>(m_Data.behaviorBlocks.size())) {
+            block = &m_Data.behaviorBlocks[bbIndex];
+        }
+    } else {
+        block = &m_Data.scriptRoot;
+    }
+
+    if (block && opIndex >= 0 && opIndex < block->operationCount) {
+        return block->operations[opIndex];
+    }
+
+    // If not found, log and throw
+    m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation %d not found", id);
+    throw std::runtime_error("Operation not found");
+}
+
+bool GraphBuilder::IsOperation(CK_ID id) const {
+    CKObject *obj = m_Context->GetObject(id);
+    return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
 }
 
 void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth) {
@@ -484,7 +484,6 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
     ConfigureDirectParameterConnections(inputChain, outputChain);
 }
 
-// Function to connect input parameters to their sources
 void GraphBuilder::ConfigureDirectParameterConnections(
     const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &inputChain,
     const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &outputChain) {
