@@ -24,7 +24,7 @@ void FlowLayout::CalculateLayout(CKBehavior *script) {
         if (behaviorBlock.isBehaviorGraph) {
             CalculateBehaviorPositions(
                 m_GraphBuilder.GetBehaviorBlock(pair.first),
-                (CKBehavior *) m_Context->GetObjectA(behaviorBlock.id),
+                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
                 behaviorBlock.depth == 0
             );
         }
@@ -38,20 +38,20 @@ void FlowLayout::CalculateLayout(CKBehavior *script) {
             for (int i = 0; i < MAX_FIX_STACK_OPS; ++i) {
                 CalculateOperationPositions(
                     m_GraphBuilder.GetBehaviorBlock(pair.first),
-                    (CKBehavior *) m_Context->GetObjectA(behaviorBlock.id)
+                    (CKBehavior *) m_Context->GetObject(behaviorBlock.id)
                 );
             }
 
             // Calculate parameter positions
             CalculateLocalParameterPositions(
                 m_GraphBuilder.GetBehaviorBlock(pair.first),
-                (CKBehavior *) m_Context->GetObjectA(behaviorBlock.id),
+                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
                 false
             );
 
             CalculateLocalParameterPositions(
                 m_GraphBuilder.GetBehaviorBlock(pair.first),
-                (CKBehavior *) m_Context->GetObjectA(behaviorBlock.id),
+                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
                 true
             );
         }
