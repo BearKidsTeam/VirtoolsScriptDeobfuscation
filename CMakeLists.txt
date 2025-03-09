@@ -47,7 +47,7 @@ add_library(VirtoolsLoader SHARED
         InterfaceData.cpp InterfaceData.h
         Decorator.cpp Decorator.h
         GraphBuilder.cpp GraphBuilder.h
-        FlowLayout.cpp FlowLayout.h
+        LayoutCalculator.cpp LayoutCalculator.h
         VirtoolsLoader.rc)
 target_include_directories(VirtoolsLoader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(VirtoolsLoader PRIVATE CK2 VxMath minhook)

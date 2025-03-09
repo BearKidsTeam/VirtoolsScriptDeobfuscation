@@ -1,20 +1,20 @@
-#include "FlowLayout.h"
+#include "LayoutCalculator.h"
 #include "CKAll.h"
 
 #undef min
 #undef max
 
-FlowLayout::FlowLayout(InterfaceData &target_data, CKContext *context, GraphBuilder &graph_builder)
+LayoutCalculator::LayoutCalculator(InterfaceData &target_data, CKContext *context, GraphBuilder &graph_builder)
     : m_Data(target_data), m_Context(context), m_GraphBuilder(graph_builder) {}
 
-void FlowLayout::DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize) {
+void LayoutCalculator::DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize) {
     m_Data.start.id = script.id;
     m_Data.start.vSize = verticalSize;
     m_Data.start.vStartPos = verticalStartPos;
     m_Data.start.vStart = 0;
 }
 
-void FlowLayout::CalculateLayout(CKBehavior *script) {
+void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     // Get behavior map from the graph builder
     const auto& behaviorMap = m_GraphBuilder.GetBehaviorMap();
 
@@ -66,7 +66,7 @@ void FlowLayout::CalculateLayout(CKBehavior *script) {
     RecalculateAbsolutePositions(m_Data.scriptRoot, script, 0.0f, 0.0f);
 }
 
-void FlowLayout::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
+void LayoutCalculator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
                                            float startHorizontal, float startVertical) {
     // Reset position for root behavior
     if (behaviorBlock.depth == 0) {
@@ -102,7 +102,7 @@ void FlowLayout::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBe
     }
 }
 
-void FlowLayout::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
+void LayoutCalculator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
     Edge edge = {};
     edge.sourceId = sourceId;
     edge.targetId = targetId;
@@ -112,7 +112,7 @@ void FlowLayout::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
     m_Edges.push_back(edge);
 }
 
-void FlowLayout::ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
+void LayoutCalculator::ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
     // Clear existing graph data
     m_Vertices.clear();
     m_Edges.clear();
@@ -148,7 +148,7 @@ void FlowLayout::ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavi
     }
 }
 
-void FlowLayout::CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue) {
+void LayoutCalculator::CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue) {
     while (!nodeQueue.empty()) {
         CK_ID currentId = nodeQueue.front();
         nodeQueue.pop();
@@ -169,7 +169,7 @@ void FlowLayout::CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue) {
     }
 }
 
-void FlowLayout::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
+void LayoutCalculator::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
     m_DistanceFromRoot.clear();
     m_PredecessorEdge.clear();
 
@@ -188,7 +188,7 @@ void FlowLayout::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
     }
 }
 
-Rect FlowLayout::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot) {
+Rect LayoutCalculator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot) {
     CK_ID currentId = behaviorBlock.id;
     Rect size = behaviorBlock.size;
 
@@ -231,7 +231,7 @@ Rect FlowLayout::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot
     return m_RequiredSize[behaviorBlock.id] = size;
 }
 
-void FlowLayout::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot) {
+void LayoutCalculator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
         behaviorBlock.size.hPos = horizontalPos;
@@ -269,7 +269,7 @@ void FlowLayout::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horiz
     }
 }
 
-float FlowLayout::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript) {
+float LayoutCalculator::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript) {
     // Build the graph representation
     ConstructGraph(behaviorGraph, behavior);
 
@@ -295,17 +295,17 @@ float FlowLayout::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBeh
     return size.vSize / 2;
 }
 
-void FlowLayout::MoveParameterToPosition(Parameter &parameter, Point position) {
+void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, Point position) {
     parameter.hPos = (int) roundf(position.h);
     parameter.vPos = (int) roundf(position.v);
 }
 
-void FlowLayout::MoveOperationToPosition(Operation &operation, Point position) {
+void LayoutCalculator::MoveOperationToPosition(Operation &operation, Point position) {
     operation.hPos = (position.h - 1) * 20;
     operation.vPos = (position.v - 2) * 20;
 }
 
-Point FlowLayout::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
+Point LayoutCalculator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
     Point position = {};
 
     // Handle operation
@@ -325,7 +325,7 @@ Point FlowLayout::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
     return position;
 }
 
-Point FlowLayout::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
+Point LayoutCalculator::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
     Point position = {};
 
     // Handle operation
@@ -345,7 +345,7 @@ Point FlowLayout::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
     return position;
 }
 
-void FlowLayout::CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
+void LayoutCalculator::CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
     // Position operations based on their parameter links
     for (auto &paramLink : behaviorGraph.links) {
         if (paramLink.type == LINK_TYPE_PARAMETER) {
@@ -368,7 +368,7 @@ void FlowLayout::CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBeh
     }
 }
 
-void FlowLayout::CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior,
+void LayoutCalculator::CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior,
                                                bool isInputDirection) {
     for (auto &paramLink : behaviorGraph.links) {
         if (paramLink.type == LINK_TYPE_PARAMETER) {
@@ -417,7 +417,7 @@ void FlowLayout::CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, 
     }
 }
 
-void FlowLayout::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
+void LayoutCalculator::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
     if (behaviorBlock.depth > 0) {
         // Calculate height based on max of inputs and outputs
         int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());

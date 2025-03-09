@@ -1,6 +1,6 @@
 #include "Decorator.h"
 #include "GraphBuilder.h"
-#include "FlowLayout.h"
+#include "LayoutCalculator.h"
 #include "CKAll.h"
 
 class DecoratorImpl {
@@ -19,7 +19,7 @@ public:
 
 private:
     GraphBuilder m_GraphBuilder;
-    FlowLayout m_FlowLayout;
+    LayoutCalculator m_FlowLayout;
 };
 
 void Decorate(InterfaceData &data, CKBehavior *behavior) {

@@ -9,10 +9,10 @@ class CKContext;
 class CKBehavior;
 
 /**
- * FlowLayout calculates the visual layout of a behavior tree.
+ * LayoutCalculator calculates the visual layout of a behavior tree.
  * It handles positioning and sizing of all elements.
  */
-class FlowLayout {
+class LayoutCalculator {
 public:
     /**
      * Constructor
@@ -20,7 +20,7 @@ public:
      * @param context Pointer to the CK context
      * @param graph_builder Reference to the graph builder
      */
-    FlowLayout(InterfaceData &target_data, CKContext *context, GraphBuilder &graph_builder);
+    LayoutCalculator(InterfaceData &target_data, CKContext *context, GraphBuilder &graph_builder);
 
     /**
      * Sets start information for the behavior script
@@ -43,8 +43,8 @@ public:
      * @param startHorizontal Starting horizontal position
      * @param startVertical Starting vertical position
      */
-    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior, float startHorizontal,
-                                    float startVertical);
+    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
+                                      float startHorizontal, float startVertical);
 
 private:
     // Reference to the interface data
