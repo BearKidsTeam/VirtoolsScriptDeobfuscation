@@ -1,8 +1,8 @@
 #pragma once
 
-#include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <queue>
-#include <set>
 #include <utility>
 
 #include "InterfaceData.h"
@@ -44,22 +44,22 @@ public:
 
 private:
     // Reference to the interface data
-    InterfaceData &m_data;
+    InterfaceData &m_Data;
 
     // Pointer to the CK context
-    CKContext *m_context;
+    CKContext *m_Context;
 
     // Maximum fix stack operations
     static const int MAX_FIX_STACK_OPS = 3;
 
     // Maps to track object relationships
-    std::map<CK_ID, int> m_behaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
-    std::map<CK_ID, std::pair<int, int>> m_operationMap; // Maps operation ID to <block index, op index>
+    std::unordered_map<CK_ID, int> m_BehaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
+    std::unordered_map<CK_ID, std::pair<int, int>> m_OperationMap; // Maps operation ID to <block index, op index>
 
     // Sets to track parameters
-    std::set<CK_ID> m_inputParams;  // Input parameter IDs
-    std::set<CK_ID> m_outputParams; // Output parameter IDs
-    std::set<CK_ID> m_movedOperations;
+    std::unordered_set<CK_ID> m_InputParams;  // Input parameter IDs
+    std::unordered_set<CK_ID> m_OutputParams; // Output parameter IDs
+    std::unordered_set<CK_ID> m_MovedOperations;
 
     /**
      * Gets a behavior block by ID
@@ -155,18 +155,18 @@ private:
      * Edge structure for graph representation
      */
     struct Edge {
-        CK_ID sourceId;         // Source node ID
-        CK_ID targetId;         // Target node ID
+        CK_ID sourceId = 0;         // Source node ID
+        CK_ID targetId = 0;         // Target node ID
         int nextEdgeIndex = -1; // Next edge index from the same source
     };
 
     // Graph state
-    std::map<CK_ID, Vertex> m_vertices;
-    std::map<CK_ID, int> m_distanceFromRoot;
-    std::map<CK_ID, Rect> m_requiredSize;
-    std::map<CK_ID, int> m_predecessorEdge;
-    std::map<CK_ID, std::vector<int>> m_bridges;
-    std::vector<Edge> m_edges;
+    std::unordered_map<CK_ID, Vertex> m_Vertices;
+    std::unordered_map<CK_ID, int> m_DistanceFromRoot;
+    std::unordered_map<CK_ID, Rect> m_RequiredSize;
+    std::unordered_map<CK_ID, int> m_PredecessorEdge;
+    std::unordered_map<CK_ID, std::vector<int>> m_Bridges;
+    std::vector<Edge> m_Edges;
 
     /**
      * Adds an edge to the graph
