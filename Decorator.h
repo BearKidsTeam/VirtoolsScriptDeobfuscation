@@ -26,7 +26,7 @@ public:
      * @param target_data Reference to the interface data to populate
      * @param context Pointer to the CK context
      */
-    Decorator(interface_t &target_data, CKContext *context);
+    Decorator(InterfaceData &target_data, CKContext *context);
 
     /**
      * Sets start information for the behavior script
@@ -34,7 +34,7 @@ public:
      * @param verticalStartPos Vertical start position
      * @param verticalSize Vertical size
      */
-    void DecorateStart(bb_t &script, float verticalStartPos, float verticalSize);
+    void DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize);
 
     /**
      * Decorates a behavior tree, populating the interface data
@@ -44,7 +44,7 @@ public:
 
 private:
     // Reference to the interface data
-    interface_t &m_data;
+    InterfaceData &m_data;
 
     // Pointer to the CK context
     CKContext *m_context;
@@ -53,8 +53,8 @@ private:
     static const int MAX_FIX_STACK_OPS = 3;
 
     // Maps to track object relationships
-    std::map<CK_ID, int> m_behaviorMap;                  // Maps behavior ID to index in bbs array
-    std::map<CK_ID, std::pair<int, int>> m_operationMap; // Maps operation ID to <bb index, op index>
+    std::map<CK_ID, int> m_behaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
+    std::map<CK_ID, std::pair<int, int>> m_operationMap; // Maps operation ID to <block index, op index>
 
     // Sets to track parameters
     std::set<CK_ID> m_inputParams;  // Input parameter IDs
@@ -66,14 +66,14 @@ private:
      * @param id Behavior ID
      * @return Reference to the behavior block
      */
-    bb_t &GetBehaviorBlock(CK_ID id);
+    BehaviorBlock &GetBehaviorBlock(CK_ID id);
 
     /**
      * Gets an operation by ID
      * @param id Operation ID
      * @return Reference to the operation
      */
-    op_t &GetOperation(CK_ID id);
+    Operation &GetOperation(CK_ID id);
 
     //------------------------------------------------------------------
     // Parameter-related types and methods
@@ -116,7 +116,7 @@ private:
      * @param parameter Parameter
      * @return Link endpoint
      */
-    link_endpoint_t GetParameterEndpoint(CKParameter *parameter);
+    LinkEndpoint GetParameterEndpoint(CKParameter *parameter);
 
     /**
      * Gets the owner behavior of a parameter
@@ -163,7 +163,7 @@ private:
     // Graph state
     std::map<CK_ID, Vertex> m_vertices;
     std::map<CK_ID, int> m_distanceFromRoot;
-    std::map<CK_ID, rect_t> m_requiredSize;
+    std::map<CK_ID, Rect> m_requiredSize;
     std::map<CK_ID, int> m_predecessorEdge;
     std::map<CK_ID, std::vector<int>> m_bridges;
     std::vector<Edge> m_edges;
@@ -180,7 +180,7 @@ private:
      * @param behaviorGraph Behavior graph
      * @param behavior Behavior
      */
-    void ConstructGraph(bb_t &behaviorGraph, CKBehavior *behavior);
+    void ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior);
 
     /**
      * Helper for calculating minimum distances in the graph
@@ -192,15 +192,15 @@ private:
      * Calculates minimum distances from the root
      * @param behaviorGraph Behavior graph
      */
-    void CalculateGraphDistances(bb_t &behaviorGraph);
+    void CalculateGraphDistances(BehaviorBlock &behaviorGraph);
 
     /**
      * Calculates the size of a subgraph
      * @param behaviorBlock Behavior building block
      * @param isRoot Whether this is the root node
-     * @return Size rectangle
+     * @return Size Rect
      */
-    rect_t CalculateSubgraphSize(bb_t &behaviorBlock, bool isRoot);
+    Rect CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot);
 
     /**
      * Places a behavior within its parent
@@ -209,7 +209,7 @@ private:
      * @param verticalPos Vertical position
      * @param isRoot Whether this is the root node
      */
-    void PlaceBehaviorInParent(bb_t &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot);
+    void PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot);
 
     /**
      * Calculates positions for behaviors in the graph
@@ -218,7 +218,7 @@ private:
      * @param isScript Whether the behavior is a script
      * @return Vertical center position
      */
-    float CalculateBehaviorPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isScript);
+    float CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript);
 
     //------------------------------------------------------------------
     // Visual property calculation
@@ -229,14 +229,14 @@ private:
      * @param parameter Parameter
      * @param position Position
      */
-    void MoveParameterToPosition(param_t &parameter, point_t position);
+    void MoveParameterToPosition(Parameter &parameter, Point position);
 
     /**
      * Moves an operation to a position
      * @param operation Operation
      * @param position Position
      */
-    void MoveOperationToPosition(op_t &operation, point_t position);
+    void MoveOperationToPosition(Operation &operation, Point position);
 
     /**
      * Gets the input position for an interface
@@ -244,7 +244,7 @@ private:
      * @param inputIndex Input position
      * @return Point
      */
-    point_t GetInterfaceInputPosition(CK_ID targetId, int inputIndex);
+    Point GetInterfaceInputPosition(CK_ID targetId, int inputIndex);
 
     /**
      * Gets the output position for an interface
@@ -252,7 +252,7 @@ private:
      * @param outputIndex Output position
      * @return Point
      */
-    point_t GetInterfaceOutputPosition(CK_ID targetId, int outputIndex);
+    Point GetInterfaceOutputPosition(CK_ID targetId, int outputIndex);
 
     /**
      * Checks if an ID is an operation
@@ -266,7 +266,7 @@ private:
      * @param behaviorGraph Behavior graph
      * @param behavior Behavior
      */
-    void CalculateOperationPositions(bb_t &behaviorGraph, CKBehavior *behavior);
+    void CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior);
 
     /**
      * Calculates positions for local parameters
@@ -274,14 +274,14 @@ private:
      * @param behavior Behavior
      * @param isInputDirection Direction (true for inputs, false for outputs)
      */
-    void CalculateLocalParameterPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
+    void CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
 
     /**
      * Calculates the size of a behavior
      * @param behaviorBlock Behavior
      * @param behavior CK behavior
      */
-    void CalculateBehaviorSize(bb_t &behaviorBlock, CKBehavior *behavior);
+    void CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior);
 
     /**
      * Recalculates absolute positions for behaviors
@@ -290,7 +290,7 @@ private:
      * @param startHorizontal Starting horizontal position
      * @param startVertical Starting vertical position
      */
-    void RecalculateAbsolutePositions(bb_t &behaviorBlock, CKBehavior *behavior, float startHorizontal,
+    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior, float startHorizontal,
                                       float startVertical);
 
     //------------------------------------------------------------------
@@ -303,7 +303,7 @@ private:
      * @param behavior CK behavior
      * @param depth Depth in the tree
      */
-    void DecorateBehavior(bb_t &behaviorBlock, CKBehavior *behavior, int depth);
+    void DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth);
 
     /**
      * Decorates all behaviors in the tree
@@ -317,4 +317,4 @@ private:
  * @param data Interface data
  * @param behavior Behavior to decorate
  */
-void Decorate(interface_t &data, CKBehavior *behavior);
+void Decorate(InterfaceData &data, CKBehavior *behavior);

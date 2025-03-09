@@ -1,55 +1,61 @@
 #include "Decorator.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "CKAll.h"
 
 #undef min
 #undef max
 
-Decorator::Decorator(interface_t &target_data, CKContext *context) : m_data(target_data), m_context(context) {}
-
-bb_t &Decorator::GetBehaviorBlock(CK_ID id) {
-    int index = m_behaviorMap[id];
-    return (index >= 0) ? m_data.bbs[index] : m_data.script_root;
+Decorator::Decorator(InterfaceData &target_data, CKContext *context)
+    : m_data(target_data), m_context(context) {
 }
 
-op_t &Decorator::GetOperation(CK_ID id) {
+BehaviorBlock &Decorator::GetBehaviorBlock(CK_ID id) {
+    int index = m_behaviorMap[id];
+    return (index >= 0) ? m_data.behaviorBlocks[index] : m_data.scriptRoot;
+}
+
+Operation &Decorator::GetOperation(CK_ID id) {
     auto &opInfo = m_operationMap[id];
     int bbIndex = opInfo.first;
     int opIndex = opInfo.second;
 
     if (bbIndex >= 0) {
-        return m_data.bbs[bbIndex].ops[opIndex];
+        return m_data.behaviorBlocks[bbIndex].operations[opIndex];
     } else {
-        return m_data.script_root.ops[opIndex];
+        return m_data.scriptRoot.operations[opIndex];
     }
 }
 
-void Decorator::DecorateStart(bb_t &script, float verticalStartPos, float verticalSize) {
+void Decorator::DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize) {
     m_data.start.id = script.id;
-    m_data.start.v_size = verticalSize;
-    m_data.start.v_start_pos = verticalStartPos;
-    m_data.start.v_start = 0;
+    m_data.start.vSize = verticalSize;
+    m_data.start.vStartPos = verticalStartPos;
+    m_data.start.vStart = 0;
 }
 
 void Decorator::Decorate(CKBehavior *script) {
+    // Clear existing data
+    m_data.Clear();
+
     // Populate the interface data
     DecorateBehaviorTree(script);
 
     // Calculate the height of the behavior block
-    float blockHeight = std::max(m_requiredSize[script->GetID()].v_size + 4 * 20.0f, 200.0f);
+    float blockHeight = std::max(m_requiredSize[script->GetID()].vSize + 4 * 20.0f, 200.0f);
     float startVertical = blockHeight / 2.0f;
 
     // Set start information and recalculate positions
-    DecorateStart(m_data.script_root, startVertical, blockHeight);
-    RecalculateAbsolutePositions(m_data.script_root, script, 0.0f, 0.0f);
+    DecorateStart(m_data.scriptRoot, startVertical, blockHeight);
+    RecalculateAbsolutePositions(m_data.scriptRoot, script, 0.0f, 0.0f);
 }
 
 void Decorator::DecorateBehaviorTree(CKBehavior *rootBehavior) {
     // Initialize data structures
-    m_data.n_bb = 0;
-    m_data.bbs.clear();
+    m_data.behaviorBlockCount = 0;
+    m_data.behaviorBlocks.clear();
     m_behaviorMap.clear();
     m_operationMap.clear();
     m_inputParams.clear();
@@ -68,22 +74,22 @@ void Decorator::DecorateBehaviorTree(CKBehavior *rootBehavior) {
 
         // Create a new behavior block if not the root
         if (depth > 0) {
-            m_data.bbs.emplace_back();
-            ++m_data.n_bb;
+            m_data.behaviorBlocks.emplace_back();
+            ++m_data.behaviorBlockCount;
         }
 
         // Map behavior ID to index
-        m_behaviorMap[currentBehavior->GetID()] = depth > 0 ? m_data.bbs.size() - 1 : -1;
+        m_behaviorMap[currentBehavior->GetID()] = depth > 0 ? m_data.behaviorBlocks.size() - 1 : -1;
 
         // Map operation IDs to indices
         const int operationCount = currentBehavior->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
             CKParameterOperation *operation = currentBehavior->GetParameterOperation(i);
-            m_operationMap[operation->GetID()] = std::make_pair(depth > 0 ? m_data.bbs.size() - 1 : -1, i);
+            m_operationMap[operation->GetID()] = std::make_pair(depth > 0 ? m_data.behaviorBlocks.size() - 1 : -1, i);
         }
 
         // Get the behavior block and decorate it
-        bb_t &behaviorBlock = depth > 0 ? m_data.bbs.back() : m_data.script_root;
+        BehaviorBlock &behaviorBlock = depth > 0 ? m_data.behaviorBlocks.back() : m_data.scriptRoot;
         DecorateBehavior(behaviorBlock, currentBehavior, depth);
 
         // Enqueue sub-behaviors for processing
@@ -99,8 +105,8 @@ void Decorator::DecorateBehaviorTree(CKBehavior *rootBehavior) {
 
     // Calculate layout for each behavior block
     for (auto &pair : m_behaviorMap) {
-        bb_t &behaviorBlock = GetBehaviorBlock(pair.first);
-        if (behaviorBlock.is_bg) {
+        BehaviorBlock &behaviorBlock = GetBehaviorBlock(pair.first);
+        if (behaviorBlock.isBehaviorGraph) {
             CalculateBehaviorPositions(
                 GetBehaviorBlock(pair.first),
                 (CKBehavior *) m_context->GetObjectA(behaviorBlock.id),
@@ -111,8 +117,8 @@ void Decorator::DecorateBehaviorTree(CKBehavior *rootBehavior) {
 
     // Calculate visual properties
     for (auto &pair : m_behaviorMap) {
-        bb_t &behaviorBlock = GetBehaviorBlock(pair.first);
-        if (behaviorBlock.is_bg) {
+        BehaviorBlock &behaviorBlock = GetBehaviorBlock(pair.first);
+        if (behaviorBlock.isBehaviorGraph) {
             // Apply multiple passes of operation positioning
             for (int i = 0; i < MAX_FIX_STACK_OPS; ++i) {
                 CalculateOperationPositions(
@@ -137,11 +143,11 @@ void Decorator::DecorateBehaviorTree(CKBehavior *rootBehavior) {
     }
 }
 
-void Decorator::DecorateBehavior(bb_t &behaviorBlock, CKBehavior *behavior, int depth) {
+void Decorator::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth) {
     behaviorBlock.id = behavior->GetID();
     behaviorBlock.folded = true;
     behaviorBlock.depth = depth;
-    behaviorBlock.is_bg = behavior->GetType() != CKBEHAVIORTYPE_BASE;
+    behaviorBlock.isBehaviorGraph = behavior->GetType() != CKBEHAVIORTYPE_BASE;
 
     // Calculate size based on behavior properties
     CalculateBehaviorSize(behaviorBlock, behavior);
@@ -170,29 +176,29 @@ void Decorator::DecorateBehavior(bb_t &behaviorBlock, CKBehavior *behavior, int 
     }
 
     // Process behavior links if this is a behavior graph
-    if (behaviorBlock.is_bg) {
+    if (behaviorBlock.isBehaviorGraph) {
         // Add behavior links
         for (int i = 0, count = behavior->GetSubBehaviorLinkCount(); i < count; ++i) {
             CKBehaviorLink *behaviorLink = behavior->GetSubBehaviorLink(i);
 
-            link_t link;
-            link.type = 1; // Behavior link
+            Link link;
             link.id = behaviorLink->GetID();
-            link.point_count = 0;
-            link.start = link.end = link_endpoint_t();
+            link.type = LINK_TYPE_BEHAVIOR; // Behavior link
+            link.pointCount = 0;
+            link.start = link.end = LinkEndpoint();
 
             // Set start endpoint
             CKBehaviorIO *inputIO = behaviorLink->GetInBehaviorIO();
             CKBehavior *inputBehavior = inputIO->GetOwner();
             link.start.id = inputBehavior->GetID();
-            link.start.type = 13; // Output
+            link.start.type = ENDPOINT_BOUT; // Output
             link.start.index = inputBehavior->GetOutputPosition(inputIO);
 
             if (link.start.index == -1) {
                 link.start.index = inputBehavior->GetInputPosition(inputIO);
-                link.start.type = 12; // Input
+                link.start.type = ENDPOINT_BIN; // Input
                 if (inputBehavior->GetType() == CKBEHAVIORTYPE_SCRIPT) {
-                    link.start.type = 26; // Start input
+                    link.start.type = ENDPOINT_START_BIN; // Start input
                 }
             }
 
@@ -200,54 +206,52 @@ void Decorator::DecorateBehavior(bb_t &behaviorBlock, CKBehavior *behavior, int 
             CKBehaviorIO *outputIO = behaviorLink->GetOutBehaviorIO();
             CKBehavior *outputBehavior = outputIO->GetOwner();
             link.end.id = outputBehavior->GetID();
-            link.end.type = 12; // Input
+            link.end.type = ENDPOINT_BIN; // Input
             link.end.index = outputBehavior->GetInputPosition(outputIO);
 
             if (link.end.index == -1) {
                 link.end.index = outputBehavior->GetOutputPosition(outputIO);
-                link.end.type = 13; // Output
+                link.end.type = ENDPOINT_BOUT; // Output
             }
 
-            behaviorBlock.links.push_back(link);
+            behaviorBlock.AddLink(link);
         }
 
         // Add operations
         for (int i = 0, count = behavior->GetParameterOperationCount(); i < count; ++i) {
             CKParameterOperation *operation = behavior->GetParameterOperation(i);
 
-            op_t operationData;
+            Operation operationData;
             operationData.id = operation->GetID();
-            behaviorBlock.ops.push_back(operationData);
+            behaviorBlock.AddOperation(operationData);
         }
-        behaviorBlock.n_ops = behaviorBlock.ops.size();
 
         // Add local parameters
         for (int i = 0, count = behavior->GetLocalParameterCount(); i < count; ++i) {
             CKParameterLocal *localParam = behavior->GetLocalParameter(i);
 
-            param_t paramData;
+            Parameter paramData;
             paramData.id = localParam->GetID();
-            paramData.style = param_style_closed;
-            behaviorBlock.local_params.push_back(paramData);
+            paramData.style = PARAM_STYLE_CLOSED;
+            behaviorBlock.AddLocalParameter(paramData);
         }
-        behaviorBlock.n_local_param = behaviorBlock.local_params.size();
     }
 }
 
-void Decorator::RecalculateAbsolutePositions(bb_t &behaviorBlock, CKBehavior *behavior, float startHorizontal,
+void Decorator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior, float startHorizontal,
                                              float startVertical) {
     // Reset position for root behavior
     if (behaviorBlock.depth == 0) {
-        behaviorBlock.size.h_pos = 0;
-        behaviorBlock.size.v_pos = 0;
+        behaviorBlock.size.hPos = 0;
+        behaviorBlock.size.vPos = 0;
     }
 
     // Apply offset
-    behaviorBlock.size.h_pos += startHorizontal;
-    behaviorBlock.size.v_pos += startVertical;
+    behaviorBlock.size.hPos += startHorizontal;
+    behaviorBlock.size.vPos += startVertical;
 
     // Process sub-behaviors and operations if this is a behavior graph
-    if (behaviorBlock.is_bg) {
+    if (behaviorBlock.isBehaviorGraph) {
         // Process sub-behaviors
         const int subBehaviorCount = behavior->GetSubBehaviorCount();
         for (int i = 0; i < subBehaviorCount; ++i) {
@@ -255,17 +259,17 @@ void Decorator::RecalculateAbsolutePositions(bb_t &behaviorBlock, CKBehavior *be
             RecalculateAbsolutePositions(
                 GetBehaviorBlock(subBehavior->GetID()),
                 subBehavior,
-                behaviorBlock.size.h_pos,
-                behaviorBlock.size.v_pos
+                behaviorBlock.size.hPos,
+                behaviorBlock.size.vPos
             );
         }
 
         // Process operations
         const int operationCount = behavior->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
-            op_t &operation = GetOperation(behavior->GetParameterOperation(i)->GetID());
-            operation.h_pos += behaviorBlock.size.h_pos;
-            operation.v_pos += behaviorBlock.size.v_pos;
+            Operation &operation = GetOperation(behavior->GetParameterOperation(i)->GetID());
+            operation.hPos += behaviorBlock.size.hPos;
+            operation.vPos += behaviorBlock.size.vPos;
         }
     }
 }
@@ -302,7 +306,8 @@ Decorator::ParameterPosition Decorator::GetInputParameterPosition(CKParameterIn 
     throw; // Unexpected owner type
 }
 
-Decorator::ParameterPosition Decorator::GetOutputParameterPosition(CKParameterOut *outputParam, CKBehavior **ownerBehavior) {
+Decorator::ParameterPosition Decorator::GetOutputParameterPosition(CKParameterOut *outputParam,
+                                                                   CKBehavior **ownerBehavior) {
     ParameterPosition position = {};
     CKObject *ownerObject = outputParam->GetOwner();
     position.id = ownerObject->GetID();
@@ -342,17 +347,17 @@ Decorator::ParameterPosition Decorator::GetLocalParameterPosition(CKParameterLoc
     return position;
 }
 
-link_endpoint_t Decorator::GetParameterEndpoint(CKParameter *parameter) {
+LinkEndpoint Decorator::GetParameterEndpoint(CKParameter *parameter) {
     // Check if parameter is local
     if (parameter->GetClassID() == CKCID_PARAMETERLOCAL) {
         ParameterPosition position = GetLocalParameterPosition((CKParameterLocal *) parameter);
-        return {position.id, position.index, 9}; // Local parameter endpoint
+        return {position.id, position.index, ENDPOINT_PLOCAL}; // Local parameter endpoint
     }
 
     // Get output parameter endpoint
     CKBehavior *dummy;
     ParameterPosition position = GetOutputParameterPosition((CKParameterOut *) parameter, &dummy);
-    return {position.id, position.index, 8}; // Output parameter endpoint
+    return {position.id, position.index, ENDPOINT_POUT}; // Output parameter endpoint
 }
 
 CKBehavior *Decorator::GetParameterOwnerBehavior(CKParameter *parameter) {
@@ -383,23 +388,22 @@ CKBehavior *Decorator::GetParameterOwnerBehavior(CKParameter *parameter) {
 
 Decorator::ParameterPosition Decorator::GetShortcutParameterPosition(CK_ID behaviorId, CK_ID sourceId) {
     // Check if shortcut already exists
-    bb_t &behaviorBlock = GetBehaviorBlock(behaviorId);
-    for (int i = 0, count = behaviorBlock.n_shared_param; i < count; ++i) {
-        if (behaviorBlock.shared_params[i].source_id == sourceId) {
+    BehaviorBlock &behaviorBlock = GetBehaviorBlock(behaviorId);
+    for (int i = 0, count = behaviorBlock.sharedParamCount; i < count; ++i) {
+        if (behaviorBlock.sharedParams[i].sourceId == sourceId) {
             return {behaviorId, i, behaviorId};
         }
     }
 
     // Create a new shortcut parameter
-    param_t paramData;
-    paramData.source_id = sourceId;
-    paramData.h_pos = paramData.v_pos = 0;
+    Parameter paramData;
+    paramData.sourceId = sourceId;
+    paramData.hPos = paramData.vPos = 0;
     paramData.id = sourceId;
-    paramData.style = param_style_closed;
-    behaviorBlock.shared_params.push_back(paramData);
-    ++behaviorBlock.n_shared_param;
+    paramData.style = PARAM_STYLE_CLOSED;
+    behaviorBlock.AddSharedParameter(paramData);
 
-    return {behaviorId, behaviorBlock.n_shared_param - 1, behaviorId};
+    return {behaviorId, behaviorBlock.sharedParamCount - 1, behaviorId};
 }
 
 void Decorator::ConfigureParameterLinks(CKBehavior *root) {
@@ -414,10 +418,10 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
         auto *inputParam = (CKParameterIn *) m_context->GetObject(id);
 
         positionChain.push_back(GetInputParameterPosition(inputParam, &currentBehavior));
-        link_endpoint_t lastEndpoint = {
+        LinkEndpoint lastEndpoint = {
             positionChain.back().id,
             positionChain.back().index,
-            positionChain.back().index == -2 ? 10 : 7
+            positionChain.back().index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
         };
 
         // Create chain of links for input parameters
@@ -429,16 +433,15 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
                 currentBehavior->GetParent()->GetID()
             });
 
-            link_t link;
+            Link link;
             link.id = 0;
-            link.type = 0x10002;
-            link.point_count = 0;
-            link.start = {positionChain.back().id, positionChain.back().index, 7};
+            link.type = LINK_TYPE_PARAMETER_OP;
+            link.pointCount = 0;
+            link.start = {positionChain.back().id, positionChain.back().index, ENDPOINT_PIN};
             link.end = lastEndpoint;
             lastEndpoint = link.start;
 
-            GetBehaviorBlock(currentBehavior->GetID()).links.push_back(link);
-            ++GetBehaviorBlock(currentBehavior->GetID()).n_links;
+            GetBehaviorBlock(currentBehavior->GetID()).AddLink(link);
         }
     }
 
@@ -448,7 +451,7 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
         CKParameterOut *outputParam = (CKParameterOut *) m_context->GetObject(id);
 
         positionChain.push_back(GetOutputParameterPosition(outputParam, &currentBehavior));
-        link_endpoint_t lastEndpoint = {positionChain.back().id, positionChain.back().index, 8};
+        LinkEndpoint lastEndpoint = {positionChain.back().id, positionChain.back().index, ENDPOINT_POUT};
 
         // Create chain of links for output parameters
         for (; currentBehavior && currentBehavior->GetOutputParameterPosition(outputParam) != -1;
@@ -459,16 +462,15 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
                 currentBehavior->GetParent()->GetID()
             });
 
-            link_t link;
+            Link link;
             link.id = 0;
-            link.type = 0x10002;
-            link.point_count = 0;
-            link.end = {positionChain.back().id, positionChain.back().index, 8};
+            link.type = LINK_TYPE_PARAMETER_OP;
+            link.pointCount = 0;
+            link.end = {positionChain.back().id, positionChain.back().index, ENDPOINT_POUT};
             link.start = lastEndpoint;
             lastEndpoint = link.end;
 
-            GetBehaviorBlock(currentBehavior->GetID()).links.push_back(link);
-            ++GetBehaviorBlock(currentBehavior->GetID()).n_links;
+            GetBehaviorBlock(currentBehavior->GetID()).AddLink(link);
         }
     }
 
@@ -494,23 +496,22 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
             for (auto &inputPos : inputPositions) {
                 for (auto &sourcePos : sourcePositions) {
                     if (inputPos.behaviorId == sourcePos.behaviorId) {
-                        link_t link;
+                        Link link;
                         link.id = 0;
-                        link.type = 2;
-                        link.point_count = 0;
+                        link.type = LINK_TYPE_PARAMETER;
+                        link.pointCount = 0;
                         link.start = {
                             sourcePos.id,
                             sourcePos.index,
-                            sourceParam->GetClassID() == CKCID_PARAMETERLOCAL ? 9 : 8
+                            sourceParam->GetClassID() == CKCID_PARAMETERLOCAL ? ENDPOINT_PLOCAL : ENDPOINT_POUT
                         };
                         link.end = {
                             inputPos.id,
                             inputPos.index,
-                            inputPos.index == -2 ? 10 : 7
+                            inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                         };
 
-                        GetBehaviorBlock(inputPos.behaviorId).links.push_back(link);
-                        ++GetBehaviorBlock(inputPos.behaviorId).n_links;
+                        GetBehaviorBlock(inputPos.behaviorId).AddLink(link);
                         connected = true;
                         break;
                     }
@@ -522,16 +523,15 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
 
             // If no direct connection found, use a shortcut
             if (!connected) {
-                link_t link;
+                Link link;
                 link.id = 0;
-                link.type = 2;
-                link.point_count = 0;
+                link.type = LINK_TYPE_PARAMETER;
+                link.pointCount = 0;
                 ParameterPosition shortcutPos = GetShortcutParameterPosition(position.behaviorId, sourceParam->GetID());
-                link.start = {position.behaviorId, shortcutPos.index, 5};
-                link.end = {position.id, position.index, position.index == -2 ? 10 : 7};
+                link.start = {position.behaviorId, shortcutPos.index, ENDPOINT_POUT_SHORTCUT};
+                link.end = {position.id, position.index, position.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN};
 
-                GetBehaviorBlock(position.behaviorId).links.push_back(link);
-                ++GetBehaviorBlock(position.behaviorId).n_links;
+                GetBehaviorBlock(position.behaviorId).AddLink(link);
             }
         }
         // Shared source connection
@@ -546,15 +546,16 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
             for (auto &inputPos : inputPositions) {
                 for (auto &sharedPos : sharedInputPositions) {
                     if (inputPos.behaviorId == sharedPos.id) {
-                        link_t link;
+                        Link link;
                         link.id = 0;
-                        link.type = 2;
-                        link.point_count = 0;
-                        link.start = {sharedPos.id, sharedPos.index, 7};
-                        link.end = {inputPos.id, inputPos.index, inputPos.index == -2 ? 10 : 7};
+                        link.type = LINK_TYPE_PARAMETER;
+                        link.pointCount = 0;
+                        link.start = {sharedPos.id, sharedPos.index, ENDPOINT_PIN};
+                        link.end = {
+                            inputPos.id, inputPos.index, inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
+                        };
 
-                        GetBehaviorBlock(inputPos.behaviorId).links.push_back(link);
-                        ++GetBehaviorBlock(inputPos.behaviorId).n_links;
+                        GetBehaviorBlock(inputPos.behaviorId).AddLink(link);
                         connected = true;
                         break;
                     }
@@ -579,7 +580,7 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
 
         for (int j = 0, destCount = outputParam->GetDestinationCount(); j < destCount; ++j) {
             CKParameter *destParam = outputParam->GetDestination(j);
-            link_endpoint_t destEndpoint = GetParameterEndpoint(destParam);
+            LinkEndpoint destEndpoint = GetParameterEndpoint(destParam);
             CK_ID destBehaviorId = destParam->GetOwner()->GetID();
 
             bool connected = false;
@@ -587,15 +588,14 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
             // Try to find a direct connection within the same behavior
             for (auto &outputPos : outputPositions) {
                 if (outputPos.behaviorId == destBehaviorId) {
-                    link_t link;
+                    Link link;
                     link.id = 0;
-                    link.type = 2;
-                    link.point_count = 0;
-                    link.start = {outputPos.id, outputPos.index, 8};
+                    link.type = LINK_TYPE_PARAMETER;
+                    link.pointCount = 0;
+                    link.start = {outputPos.id, outputPos.index, ENDPOINT_POUT};
                     link.end = destEndpoint;
 
-                    GetBehaviorBlock(outputPos.behaviorId).links.push_back(link);
-                    ++GetBehaviorBlock(outputPos.behaviorId).n_links;
+                    GetBehaviorBlock(outputPos.behaviorId).AddLink(link);
                     connected = true;
                     break;
                 }
@@ -605,18 +605,17 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
             if (!connected) {
                 // Handle connection to a local parameter shortcut
                 if (destParam->GetClassID() == CKCID_PARAMETERLOCAL) {
-                    link_t link;
+                    Link link;
                     link.id = 0;
-                    link.type = 2;
-                    link.point_count = 0;
+                    link.type = LINK_TYPE_PARAMETER;
+                    link.pointCount = 0;
                     ParameterPosition sourcePos = outputPositions.front();
                     ParameterPosition shortcutPos = GetShortcutParameterPosition(
                         sourcePos.behaviorId, destParam->GetID());
-                    link.start = {sourcePos.id, sourcePos.index, 8};
-                    link.end = {shortcutPos.id, shortcutPos.index, 5};
+                    link.start = {sourcePos.id, sourcePos.index, ENDPOINT_POUT};
+                    link.end = {shortcutPos.id, shortcutPos.index, ENDPOINT_POUT_SHORTCUT};
 
-                    GetBehaviorBlock(sourcePos.behaviorId).links.push_back(link);
-                    ++GetBehaviorBlock(sourcePos.behaviorId).n_links;
+                    GetBehaviorBlock(sourcePos.behaviorId).AddLink(link);
                 } else {
                     // Log warning for other cases
                     m_context->OutputToConsoleEx("pout: can't connect %d <-> %d, dest type is %d",
@@ -637,7 +636,7 @@ void Decorator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
     m_edges.push_back(edge);
 }
 
-void Decorator::ConstructGraph(bb_t &behaviorGraph, CKBehavior *behavior) {
+void Decorator::ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
     // Clear existing graph data
     m_vertices.clear();
     m_edges.clear();
@@ -654,8 +653,8 @@ void Decorator::ConstructGraph(bb_t &behaviorGraph, CKBehavior *behavior) {
 
     // Add edges from behavior links (in reverse order)
     for (int i = behaviorGraph.links.size() - 1; i >= 0; --i) {
-        link_t &link = behaviorGraph.links[i];
-        if (link.type == 1) {
+        Link &link = behaviorGraph.links[i];
+        if (link.type == LINK_TYPE_BEHAVIOR) {
             // Behavior link
             AddGraphEdge(link.start.id, link.end.id);
         }
@@ -694,7 +693,7 @@ void Decorator::CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue) {
     }
 }
 
-void Decorator::CalculateGraphDistances(bb_t &behaviorGraph) {
+void Decorator::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
     m_distanceFromRoot.clear();
     m_predecessorEdge.clear();
 
@@ -713,14 +712,14 @@ void Decorator::CalculateGraphDistances(bb_t &behaviorGraph) {
     }
 }
 
-rect_t Decorator::CalculateSubgraphSize(bb_t &behaviorBlock, bool isRoot) {
+Rect Decorator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot) {
     CK_ID currentId = behaviorBlock.id;
-    rect_t size = behaviorBlock.size;
+    Rect size = behaviorBlock.size;
 
     // Reset size for root node
     if (isRoot) {
-        size.h_size = 0.0f;
-        size.v_size = 0.0f;
+        size.hSize = 0.0f;
+        size.vSize = 0.0f;
     }
 
     // Calculate size contribution from child nodes
@@ -736,9 +735,9 @@ rect_t Decorator::CalculateSubgraphSize(bb_t &behaviorBlock, bool isRoot) {
         // Only consider nodes that are direct children in the shortest path tree
         if (m_predecessorEdge.find(targetId) != m_predecessorEdge.end() &&
             m_predecessorEdge[targetId] == edgeIndex) {
-            rect_t childSize = CalculateSubgraphSize(GetBehaviorBlock(targetId), false);
-            totalVerticalSize += childSize.v_size + 20.0f * 2;
-            maxHorizontalSize = std::max(maxHorizontalSize, childSize.h_size);
+            Rect childSize = CalculateSubgraphSize(GetBehaviorBlock(targetId), false);
+            totalVerticalSize += childSize.vSize + 20.0f * 2;
+            maxHorizontalSize = std::max(maxHorizontalSize, childSize.hSize);
             childCount++;
         }
     }
@@ -749,19 +748,20 @@ rect_t Decorator::CalculateSubgraphSize(bb_t &behaviorBlock, bool isRoot) {
     }
 
     // Calculate final size
-    size.v_size = std::max(size.v_size, totalVerticalSize);
-    size.h_size = size.h_size + (maxHorizontalSize > 0.0f ? maxHorizontalSize + 20.0f * 2 : 0.0f);
+    size.vSize = std::max(size.vSize, totalVerticalSize);
+    size.hSize = size.hSize + (maxHorizontalSize > 0.0f ? maxHorizontalSize + 20.0f * 2 : 0.0f);
 
     // Store required size and return
     return m_requiredSize[behaviorBlock.id] = size;
 }
 
-void Decorator::PlaceBehaviorInParent(bb_t &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot) {
+void Decorator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos,
+                                      bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
-        behaviorBlock.size.h_pos = horizontalPos;
-        behaviorBlock.size.v_pos = verticalPos +
-            (m_requiredSize[behaviorBlock.id].v_size - behaviorBlock.size.v_size) / 2;
+        behaviorBlock.size.hPos = horizontalPos;
+        behaviorBlock.size.vPos = verticalPos +
+            (m_requiredSize[behaviorBlock.id].vSize - behaviorBlock.size.vSize) / 2;
     }
 
     // Position all children
@@ -777,14 +777,14 @@ void Decorator::PlaceBehaviorInParent(bb_t &behaviorBlock, float horizontalPos, 
         // Only consider nodes that are direct children in the shortest path tree
         if (m_predecessorEdge.find(targetId) != m_predecessorEdge.end() &&
             m_predecessorEdge[targetId] == edgeIndex) {
-            rect_t childSize = m_requiredSize[targetId];
+            Rect childSize = m_requiredSize[targetId];
             PlaceBehaviorInParent(
                 GetBehaviorBlock(targetId),
-                horizontalPos + (isRoot ? 20.0f : behaviorBlock.size.h_size + 20.0f * 2),
+                horizontalPos + (isRoot ? 20.0f : behaviorBlock.size.hSize + 20.0f * 2),
                 verticalPos + currentVerticalOffset,
                 false
             );
-            currentVerticalOffset += childSize.v_size + 20.0f * 2;
+            currentVerticalOffset += childSize.vSize + 20.0f * 2;
             childCount++;
         }
     }
@@ -795,7 +795,7 @@ void Decorator::PlaceBehaviorInParent(bb_t &behaviorBlock, float horizontalPos, 
     }
 }
 
-float Decorator::CalculateBehaviorPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isScript) {
+float Decorator::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript) {
     // Build the graph representation
     ConstructGraph(behaviorGraph, behavior);
 
@@ -803,11 +803,11 @@ float Decorator::CalculateBehaviorPositions(bb_t &behaviorGraph, CKBehavior *beh
     CalculateGraphDistances(behaviorGraph);
 
     // Calculate required sizes for all nodes
-    rect_t size = CalculateSubgraphSize(behaviorGraph, true);
+    Rect size = CalculateSubgraphSize(behaviorGraph, true);
 
     // Calculate expanded sizes
-    behaviorGraph.h_expand_size = size.h_size + 20.0f * 4;
-    behaviorGraph.v_expand_size = size.v_size + 20.0f * 4;
+    behaviorGraph.hExpandSize = size.hSize + 20.0f * 4;
+    behaviorGraph.vExpandSize = size.vSize + 20.0f * 4;
 
     // Place behaviors within the graph
     PlaceBehaviorInParent(
@@ -818,37 +818,37 @@ float Decorator::CalculateBehaviorPositions(bb_t &behaviorGraph, CKBehavior *beh
     );
 
     // Return vertical center position
-    return size.v_size / 2;
+    return size.vSize / 2;
 }
 
 bool Decorator::IsOperation(CK_ID id) {
-    return m_context->GetObject(id)->GetClassID() == CKCID_PARAMETEROPERATION;
+    return m_context->GetObjectA(id)->GetClassID() == CKCID_PARAMETEROPERATION;
 }
 
-void Decorator::MoveParameterToPosition(param_t &parameter, point_t position) {
-    parameter.h_pos = (int) roundf(position.h);
-    parameter.v_pos = (int) roundf(position.v);
+void Decorator::MoveParameterToPosition(Parameter &parameter, Point position) {
+    parameter.hPos = (int) roundf(position.h);
+    parameter.vPos = (int) roundf(position.v);
 }
 
-void Decorator::MoveOperationToPosition(op_t &operation, point_t position) {
-    operation.h_pos = (position.h - 1) * 20;
-    operation.v_pos = (position.v - 2) * 20;
+void Decorator::MoveOperationToPosition(Operation &operation, Point position) {
+    operation.hPos = (position.h - 1) * 20;
+    operation.vPos = (position.v - 2) * 20;
 }
 
-point_t Decorator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
-    point_t position = {};
+Point Decorator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
+    Point position = {};
 
     // Handle operation
     if (IsOperation(targetId)) {
-        op_t &operation = GetOperation(targetId);
-        position.h = roundf(operation.h_pos / 20.0f) + inputIndex * 2;
-        position.v = roundf(operation.v_pos / 20.0f);
+        Operation &operation = GetOperation(targetId);
+        position.h = roundf(operation.hPos / 20.0f) + inputIndex * 2;
+        position.v = roundf(operation.vPos / 20.0f);
     }
     // Handle behavior
     else {
-        bb_t &behaviorBlock = GetBehaviorBlock(targetId);
-        float horizontalPos = roundf(behaviorBlock.size.h_pos / 20.0f);
-        float verticalPos = roundf(behaviorBlock.size.v_pos / 20.0f);
+        BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
+        float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
+        float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
         position.h = horizontalPos + (float) inputIndex;
         position.v = verticalPos - 1.0f;
     }
@@ -856,41 +856,41 @@ point_t Decorator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
     return position;
 }
 
-point_t Decorator::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
-    point_t position = {};
+Point Decorator::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
+    Point position = {};
 
     // Handle operation
     if (IsOperation(targetId)) {
-        op_t &operation = GetOperation(targetId);
-        position.h = roundf(operation.h_pos / 20.0f) + 1;
-        position.v = roundf(operation.v_pos / 20.0f) + 2;
+        Operation &operation = GetOperation(targetId);
+        position.h = roundf(operation.hPos / 20.0f) + 1;
+        position.v = roundf(operation.vPos / 20.0f) + 2;
     }
     // Handle behavior
     else {
-        bb_t &behaviorBlock = GetBehaviorBlock(targetId);
-        float horizontalPos = roundf(behaviorBlock.size.h_pos / 20.0f);
-        float verticalPos = roundf(behaviorBlock.size.v_pos / 20.0f);
+        BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
+        float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
+        float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
         position.h = horizontalPos + (float) outputIndex;
-        position.v = verticalPos + roundf(behaviorBlock.size.v_size / 20.0f) + 1;
+        position.v = verticalPos + roundf(behaviorBlock.size.vSize / 20.0f) + 1;
     }
 
     return position;
 }
 
-void Decorator::CalculateOperationPositions(bb_t &behaviorGraph, CKBehavior *behavior) {
+void Decorator::CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
     // Position operations based on their parameter links
     for (auto &paramLink : behaviorGraph.links) {
-        if (paramLink.type == 2) {
+        if (paramLink.type == LINK_TYPE_PARAMETER) {
             // Parameter link
-            if (paramLink.start.type == 8 && IsOperation(paramLink.start.id)) {
-                op_t *startOperation = &GetOperation(paramLink.start.id);
+            if (paramLink.start.type == ENDPOINT_POUT && IsOperation(paramLink.start.id)) {
+                Operation *startOperation = &GetOperation(paramLink.start.id);
 
                 // Position based on destination
-                if (paramLink.end.type == 7) {
+                if (paramLink.end.type == ENDPOINT_PIN) {
                     // Normal input
                     MoveOperationToPosition(*startOperation,
                                             GetInterfaceInputPosition(paramLink.end.id, paramLink.end.index));
-                } else if (paramLink.end.type == 10) {
+                } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
                     // Target input
                     MoveOperationToPosition(*startOperation,
                                             GetInterfaceInputPosition(paramLink.end.id, -1));
@@ -900,28 +900,29 @@ void Decorator::CalculateOperationPositions(bb_t &behaviorGraph, CKBehavior *beh
     }
 }
 
-void Decorator::CalculateLocalParameterPositions(bb_t &behaviorGraph, CKBehavior *behavior, bool isInputDirection) {
+void Decorator::CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior,
+                                                 bool isInputDirection) {
     for (auto &paramLink : behaviorGraph.links) {
-        if (paramLink.type == 2) {
+        if (paramLink.type == LINK_TYPE_PARAMETER) {
             // Parameter link
             if (isInputDirection) {
                 // Position source parameters (inputs)
-                param_t *startParam = nullptr;
+                Parameter *startParam = nullptr;
 
-                if (paramLink.start.type == 9) {
+                if (paramLink.start.type == ENDPOINT_PLOCAL) {
                     // Local parameter
-                    startParam = &behaviorGraph.local_params[paramLink.start.index];
-                } else if (paramLink.start.type == 5) {
+                    startParam = &behaviorGraph.localParams[paramLink.start.index];
+                } else if (paramLink.start.type == ENDPOINT_POUT_SHORTCUT) {
                     // Shared parameter
-                    startParam = &behaviorGraph.shared_params[paramLink.start.index];
+                    startParam = &behaviorGraph.sharedParams[paramLink.start.index];
                 }
 
                 if (startParam) {
-                    if (paramLink.end.type == 7) {
+                    if (paramLink.end.type == ENDPOINT_PIN) {
                         // Normal input
                         MoveParameterToPosition(*startParam,
                                                 GetInterfaceInputPosition(paramLink.end.id, paramLink.end.index));
-                    } else if (paramLink.end.type == 10) {
+                    } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
                         // Target input
                         MoveParameterToPosition(*startParam,
                                                 GetInterfaceInputPosition(paramLink.end.id, -1));
@@ -929,15 +930,15 @@ void Decorator::CalculateLocalParameterPositions(bb_t &behaviorGraph, CKBehavior
                 }
             } else {
                 // Position destination parameters (outputs)
-                param_t *endParam = nullptr;
+                Parameter *endParam = nullptr;
 
-                if (paramLink.end.type == 9) {
+                if (paramLink.end.type == ENDPOINT_PLOCAL) {
                     // Local parameter
-                    endParam = &behaviorGraph.local_params[paramLink.end.index];
+                    endParam = &behaviorGraph.localParams[paramLink.end.index];
                 }
 
                 if (endParam) {
-                    if (paramLink.start.type == 8) {
+                    if (paramLink.start.type == ENDPOINT_POUT) {
                         // From output
                         MoveParameterToPosition(*endParam,
                                                 GetInterfaceOutputPosition(paramLink.start.id, paramLink.start.index));
@@ -948,7 +949,7 @@ void Decorator::CalculateLocalParameterPositions(bb_t &behaviorGraph, CKBehavior
     }
 }
 
-void Decorator::CalculateBehaviorSize(bb_t &behaviorBlock, CKBehavior *behavior) {
+void Decorator::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
     if (behaviorBlock.depth > 0) {
         // Calculate height based on max of inputs and outputs
         int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
@@ -960,18 +961,22 @@ void Decorator::CalculateBehaviorSize(bb_t &behaviorBlock, CKBehavior *behavior)
         width = std::max(width, 2);
 
         // Set size
-        behaviorBlock.size.h_size = (float) width * 20.0f;
-        behaviorBlock.size.v_size = (float) height * 20.0f;
+        behaviorBlock.size.hSize = (float) width * 20.0f;
+        behaviorBlock.size.vSize = (float) height * 20.0f;
 
         // Set expanded size for behavior graphs
-        if (behaviorBlock.is_bg) {
-            behaviorBlock.h_expand_size = behaviorBlock.size.h_size * 10;
-            behaviorBlock.v_expand_size = behaviorBlock.size.v_size * 10;
+        if (behaviorBlock.isBehaviorGraph) {
+            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10;
+            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10;
         }
     }
 }
 
-void Decorate(interface_t &data, CKBehavior *behavior) {
+void Decorate(InterfaceData &data, CKBehavior *behavior) {
+    // Clear any existing data
+    data.Clear();
+
+    // Create a decorator and populate the interface data
     Decorator decorator(data, behavior->GetCKContext());
     decorator.Decorate(behavior);
 }

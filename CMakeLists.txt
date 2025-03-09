@@ -42,6 +42,10 @@ add_subdirectory(minhook EXCLUDE_FROM_ALL)
 
 configure_file(Version.h.in "${CMAKE_CURRENT_SOURCE_DIR}/Version.h")
 
-add_library(VirtoolsLoader SHARED NemoLoader.cpp Decorator.cpp VirtoolsLoader.rc)
+add_library(VirtoolsLoader SHARED
+        NemoLoader.cpp
+        Decorator.cpp Decorator.h
+        InterfaceData.cpp InterfaceData.h
+        VirtoolsLoader.rc)
 target_include_directories(VirtoolsLoader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(VirtoolsLoader PRIVATE CK2 VxMath minhook)

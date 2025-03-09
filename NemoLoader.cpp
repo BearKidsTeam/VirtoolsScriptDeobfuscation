@@ -117,7 +117,7 @@ public:
         if (s_Hooked) {
             MH_DisableHook(*(LPVOID *) &s_GetFileInfoFuncTarget);
             MH_RemoveHook(*(LPVOID *) &s_GetFileInfoFuncTarget);
-			s_Hooked = false;
+            s_Hooked = false;
         }
     }
 
@@ -151,7 +151,8 @@ CKPluginInfo *NemoLoader::GetReaderInfo() {
     return g_PluginInfo;
 }
 
-CKERROR NemoLoader::Load(CKContext *context, CKSTRING FileName, CKObjectArray *liste, CKDWORD LoadFlags, CKCharacter *carac) {
+CKERROR NemoLoader::Load(CKContext *context, CKSTRING FileName, CKObjectArray *liste, CKDWORD LoadFlags,
+                         CKCharacter *carac) {
     if (!liste)
         return CKERR_INVALIDPARAMETER;
 
@@ -189,8 +190,10 @@ CKERROR NemoLoader::Save(CKContext *context, CKSTRING FileName, CKObjectArray *l
 }
 
 CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *list) {
+    if (!list)
+        return CKERR_INVALIDPARAMETER;
+
     CKERROR err = CK_OK;
-    SchematicNode node;
 
     list->Reset();
     while (!list->EndOfList()) {
@@ -198,16 +201,14 @@ CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *l
         if (CKIsChildClassOf(obj, CKCID_BEHAVIOR)) {
             CKBehavior *beh = (CKBehavior *) list->GetData(context);
             if (beh->GetType() & CKBEHAVIORTYPE_SCRIPT) {
-                node.behavior = beh;
                 if (!beh->GetInterfaceChunk()) {
-                    err = GenerateInterfaceChunk(node);
+                    err = GenerateInterfaceChunk(beh);
                     if (err == CK_OK) {
-                        beh->SetInterfaceChunk(node.chunk);
-                        context->OutputToConsoleEx((CKSTRING) "Generated interface chunk for <%s>", beh->GetName());
+                        context->OutputToConsoleEx("Generated interface chunk for <%s>", beh->GetName());
+                    } else {
+                        context->OutputToConsoleEx("Error generating interface chunk for <%s>", beh->GetName());
                     }
                 }
-                node.behavior = nullptr;
-                node.chunk = nullptr;
             }
         }
         list->Next();
@@ -217,199 +218,27 @@ CKERROR NemoLoader::GenerateInterfaceChunks(CKContext *context, CKObjectArray *l
     return CK_OK;
 }
 
-CKERROR NemoLoader::GenerateInterfaceChunk(SchematicNode &node) {
-    if (!node.behavior)
+CKERROR NemoLoader::GenerateInterfaceChunk(CKBehavior *beh) {
+    if (!beh)
         return CKERR_INVALIDPARAMETER;
 
-    CKContext *context = node.behavior->GetCKContext();
+    // Create interface data
+    InterfaceData interfaceData;
 
-    interface_t data = {};
-    Decorate(data, node.behavior);
+    // Decorate the behavior
+    Decorate(interfaceData, beh);
 
-    CKStateChunk *chunk = CreateCKStateChunk(-1);
-    node.chunk = chunk;
-    node.version = 0x16;
-    node.scriptIndex = 0;
-    node.buildingBlockIndex = 0;
+    // Fill the schematic node with needed information
+    SchematicNode node;
+    node.behavior = beh;
 
-    chunk->StartWrite();
-
-    chunk->WriteIdentifier(1);
-    chunk->WriteDword(node.version);
-    const int count = data.n_bb + 1;
-    chunk->WriteInt(count);
-
-    for (int i = 0; i < count; ++i) {
-        if (i != 0) {
-            const bb_t &bb = data.bbs[node.buildingBlockIndex];
-            node.behavior = (CKBehavior *) context->GetObject(bb.id);
-            if (!node.behavior) {
-                context->OutputToConsoleEx("Error: Behavior <%s> not found", bb.id);
-                return CKERR_NOTFOUND;
-            }
-        }
-
-        if (SaveScriptHeader(node, data)) {
-            if (!(node.flag & 0x8000)) {
-                SaveScriptLinks(node, data);
-                SaveScriptOps(node, data);
-                SaveScriptComments(node, data);
-
-                if (!node.isBuildingBlock)
-                    SaveScriptParameters(node, data);
-
-                if (node.isNotScript && !node.isBuildingBlock)
-                    SaveScriptGraph(node, data);
-            }
-        }
-
-        if (i != 0) {
-            ++node.buildingBlockIndex;
-        }
+    // Generate the interface chunk
+    CKERROR err = interfaceData.GenerateInterfaceChunk(node);
+    if (err != CK_OK) {
+        return err;
     }
 
-    SaveScriptExtra(node, data);
-
-    chunk->CloseChunk();
+    beh->SetInterfaceChunk(node.chunk);
 
     return CK_OK;
 }
-
-CKBOOL NemoLoader::SaveScriptHeader(SchematicNode &node, interface_t &data) {
-    CKBehavior *beh = node.behavior;
-    if (!beh)
-        return FALSE;
-
-    node.isNotScript = (beh->GetType() & CKBEHAVIORTYPE_SCRIPT) == 0;
-    node.isBuildingBlock = (beh->GetFlags() & CKBEHAVIOR_BUILDINGBLOCK) != 0;
-
-    CKStateChunk *chunk = node.chunk;
-
-    chunk->WriteObject(beh);
-
-    if (!node.isNotScript) {
-        chunk->WriteDword(0); // flag
-        chunk->WriteDword(node.scriptIndex++); // index
-        chunk->WriteFloat(0.0f); // h_start
-        chunk->WriteFloat(data.start.v_start);
-        chunk->WriteFloat(data.start.h_start_pos);
-        chunk->WriteFloat(data.start.v_start_pos);
-        chunk->WriteFloat(data.start.v_size);
-        chunk->WriteBitmap(nullptr); // header snapshot
-        chunk->WriteDword(0xC8C8C8); // header color
-    } else {
-        const bb_t &bb = data.bbs[node.buildingBlockIndex];
-        chunk->WriteDword(bb.folded ? 0x200 : 0);
-        chunk->WriteDword(bb.depth);
-        chunk->WriteFloat(bb.size.h_pos);
-        chunk->WriteFloat(bb.size.v_pos);
-        chunk->WriteFloat(bb.size.h_size);
-        chunk->WriteFloat(bb.size.v_size);
-        chunk->WriteFloat(bb.h_expand_size);
-        chunk->WriteFloat(bb.v_expand_size);
-    }
-
-    return TRUE;
-}
-
-void NemoLoader::SaveScriptLinks(SchematicNode &node, interface_t &data) {
-    CKStateChunk *chunk = node.chunk;
-
-    const bb_t &bb = !node.isNotScript ? data.script_root : data.bbs[node.buildingBlockIndex];
-
-    chunk->WriteInt(bb.links.size());
-    for (const auto &link: bb.links) {
-        chunk->WriteInt(link.type);
-        chunk->WriteObjectID(link.id);
-        chunk->WriteObjectID(link.start.id);
-        chunk->WriteInt(link.start.index);
-        chunk->WriteInt(link.start.type);
-        chunk->WriteInt(link.points.size());
-        for (const auto &point: link.points) {
-            chunk->WriteFloat(point.h);
-            chunk->WriteFloat(point.v);
-        }
-        chunk->WriteObjectID(link.end.id);
-        chunk->WriteInt(link.end.index);
-        chunk->WriteInt(link.end.type);
-    }
-}
-
-void NemoLoader::SaveScriptOps(SchematicNode &node, interface_t &data) {
-    CKStateChunk *chunk = node.chunk;
-
-    const bb_t &bb = !node.isNotScript ? data.script_root : data.bbs[node.buildingBlockIndex];
-
-    chunk->WriteInt(bb.ops.size());
-    for (const auto &op: bb.ops) {
-        chunk->WriteObjectID(op.id);
-        chunk->WriteFloat(op.h_pos);
-        chunk->WriteFloat(op.v_pos);
-    }
-}
-
-void NemoLoader::SaveScriptComments(SchematicNode &node, interface_t &data) {
-    CKStateChunk *chunk = node.chunk;
-
-    // No comments will be generated
-    chunk->WriteInt(0);
-}
-
-void NemoLoader::SaveScriptParameters(SchematicNode &node, interface_t &data) {
-    CKStateChunk *chunk = node.chunk;
-
-    const bb_t &bb = !node.isNotScript ? data.script_root : data.bbs[node.buildingBlockIndex];
-
-    chunk->WriteInt(bb.local_params.size());
-    for (const auto &param: bb.local_params) {
-        chunk->WriteInt(param.h_pos);
-        chunk->WriteInt(param.v_pos);
-    }
-    for (const auto &param: bb.local_params) {
-        chunk->WriteInt(param.style);
-    }
-
-    chunk->WriteInt(bb.shared_params.size());
-    for (const auto &param: bb.shared_params) {
-        chunk->WriteInt(param.h_pos);
-        chunk->WriteInt(param.v_pos);
-    }
-    for (const auto &param: bb.shared_params) {
-        chunk->WriteInt(param.style);
-    }
-    for (const auto &param: bb.shared_params) {
-        chunk->WriteObjectID(param.source_id);
-    }
-}
-
-void NemoLoader::SaveScriptGraph(SchematicNode &node, interface_t &data) {
-    CKStateChunk *chunk = node.chunk;
-
-    const bb_t &bb = !node.isNotScript ? data.script_root : data.bbs[node.buildingBlockIndex];
-
-    chunk->WriteInt(bb.inward_inputs.size());
-    for (const auto &input: bb.inward_inputs) {
-        chunk->WriteInt(input);
-        chunk->WriteInt(-1);
-    }
-
-    chunk->WriteInt(bb.outward_inputs.size());
-    for (const auto &input: bb.outward_inputs) {
-        chunk->WriteInt(input);
-        chunk->WriteInt(-1);
-    }
-
-    chunk->WriteInt(bb.inward_outputs.size());
-    for (const auto &output: bb.inward_outputs) {
-        chunk->WriteInt(output);
-        chunk->WriteInt(1);
-    }
-
-    chunk->WriteInt(bb.outward_outputs.size());
-    for (const auto &output: bb.outward_outputs) {
-        chunk->WriteInt(output);
-        chunk->WriteInt(1);
-    }
-}
-
-void NemoLoader::SaveScriptExtra(SchematicNode &node, interface_t &data) {}

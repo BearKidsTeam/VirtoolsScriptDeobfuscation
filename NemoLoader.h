@@ -3,8 +3,6 @@
 
 #include "CKAll.h"
 
-#include "InterfaceData.h"
-
 #define VIRTOOLS_COMPOSITION_READER_VERSION 0x0000001
 #define VIRTOOLS_COMPOSITION_READER_GUID CKGUID(0x6B013E56, 0x64BA597E)
 
@@ -16,17 +14,6 @@
 
 #define VIRTOOLS_PLAYER_READER_VERSION 0x0000001
 #define VIRTOOLS_PLAYER_READER_GUID CKGUID(0x28371AAB, 0x6F1A4498)
-
-struct SchematicNode {
-    CKBehavior *behavior = nullptr;
-    CKStateChunk *chunk = nullptr;
-    CKBOOL isNotScript = FALSE;
-    CKBOOL isBuildingBlock = FALSE;
-    CKDWORD flag = 0;
-    CKDWORD version = 0;
-    CKDWORD scriptIndex = 0;
-    CKDWORD buildingBlockIndex = 0;
-};
 
 class NemoLoader : public CKModelReader {
 public:
@@ -48,15 +35,7 @@ public:
     CKERROR Save(CKContext *context, CKSTRING FileName, CKObjectArray *liste, CKDWORD SaveFlags) override;
 
     CKERROR GenerateInterfaceChunks(CKContext *context, CKObjectArray *list);
-    CKERROR GenerateInterfaceChunk(SchematicNode &node);
-
-    CKBOOL SaveScriptHeader(SchematicNode &node, interface_t &data);
-    void SaveScriptLinks(SchematicNode &node, interface_t &data);
-    void SaveScriptOps(SchematicNode &node, interface_t &data);
-    void SaveScriptComments(SchematicNode &node, interface_t &data);
-    void SaveScriptParameters(SchematicNode &node, interface_t &data);
-    void SaveScriptGraph(SchematicNode &node, interface_t &data);
-    void SaveScriptExtra(SchematicNode &node, interface_t &data);
+    CKERROR GenerateInterfaceChunk(CKBehavior* behavior);
 };
 
 #endif // PLUGINS_NEMOLOADER_H
