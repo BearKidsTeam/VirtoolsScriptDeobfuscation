@@ -235,8 +235,8 @@ void Decorator::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behav
     }
 }
 
-void Decorator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior, float startHorizontal,
-                                             float startVertical) {
+void Decorator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
+                                             float startHorizontal, float startVertical) {
     // Reset position for root behavior
     if (behaviorBlock.depth == 0) {
         behaviorBlock.size.hPos = 0;
@@ -303,8 +303,7 @@ Decorator::ParameterPosition Decorator::GetInputParameterPosition(CKParameterIn 
     throw; // Unexpected owner type
 }
 
-Decorator::ParameterPosition Decorator::GetOutputParameterPosition(CKParameterOut *outputParam,
-                                                                   CKBehavior **ownerBehavior) {
+Decorator::ParameterPosition Decorator::GetOutputParameterPosition(CKParameterOut *outputParam, CKBehavior **ownerBehavior) {
     ParameterPosition position = {};
     CKObject *ownerObject = outputParam->GetOwner();
     position.id = ownerObject->GetID();
@@ -530,9 +529,8 @@ void Decorator::ConfigureParameterLinks(CKBehavior *root) {
 
                 GetBehaviorBlock(position.behaviorId).AddLink(link);
             }
-        }
-        // Shared source connection
-        else if (inputParam->GetSharedSource()) {
+        } else if (inputParam->GetSharedSource()) {
+            // Shared source connection
             CKParameterIn *sharedInput = inputParam->GetSharedSource();
             assert(sharedInput->GetOwner()->GetClassID() == CKCID_BEHAVIOR);
             std::vector<ParameterPosition> &sharedInputPositions = inputChain[sharedInput->GetID()];
@@ -752,13 +750,11 @@ Rect Decorator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot)
     return m_RequiredSize[behaviorBlock.id] = size;
 }
 
-void Decorator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos,
-                                      bool isRoot) {
+void Decorator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
         behaviorBlock.size.hPos = horizontalPos;
-        behaviorBlock.size.vPos = verticalPos +
-            (m_RequiredSize[behaviorBlock.id].vSize - behaviorBlock.size.vSize) / 2;
+        behaviorBlock.size.vPos = verticalPos + (m_RequiredSize[behaviorBlock.id].vSize - behaviorBlock.size.vSize) / 2;
     }
 
     // Position all children
@@ -819,7 +815,8 @@ float Decorator::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBeha
 }
 
 bool Decorator::IsOperation(CK_ID id) {
-    return m_Context->GetObjectA(id)->GetClassID() == CKCID_PARAMETEROPERATION;
+    CKObject *obj = m_Context->GetObject(id);
+    return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
 }
 
 void Decorator::MoveParameterToPosition(Parameter &parameter, Point position) {
@@ -840,9 +837,8 @@ Point Decorator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
         Operation &operation = GetOperation(targetId);
         position.h = roundf(operation.hPos / 20.0f) + inputIndex * 2;
         position.v = roundf(operation.vPos / 20.0f);
-    }
-    // Handle behavior
-    else {
+    } else {
+        // Handle behavior
         BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
         float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
         float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
@@ -861,9 +857,8 @@ Point Decorator::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
         Operation &operation = GetOperation(targetId);
         position.h = roundf(operation.hPos / 20.0f) + 1;
         position.v = roundf(operation.vPos / 20.0f) + 2;
-    }
-    // Handle behavior
-    else {
+    } else {
+        // Handle behavior
         BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
         float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
         float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
