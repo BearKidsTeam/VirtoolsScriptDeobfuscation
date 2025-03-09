@@ -1054,11 +1054,6 @@ struct BehaviorBlock : InterfaceElement {
     std::vector<InterfaceElement *> GetAllElements();
 
     /**
-     * @brief Automatically routes a link between its endpoints
-     */
-    void AutoRouteLink(Link &link);
-
-    /**
      * @brief Removes an element from the block
      * @param element Pointer to the element to remove
      * @return true if element was removed, false otherwise
@@ -1253,13 +1248,6 @@ public:
      * @brief Gets the bounding rectangle of the entire interface
      */
     Rect GetBoundingRect() const;
-
-    /**
-     * @brief Creates a subset of this interface data
-     * @param blockIds IDs of the blocks to include in the subset
-     * @return A new InterfaceData containing only the specified blocks
-     */
-    InterfaceData CreateSubset(const std::vector<CK_ID> &blockIds);
 
     //------------------------------------------------------
     // Serialization Methods

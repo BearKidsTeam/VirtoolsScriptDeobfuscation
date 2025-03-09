@@ -861,55 +861,6 @@ std::vector<InterfaceElement *> BehaviorBlock::GetAllElements() {
     return elements;
 }
 
-void BehaviorBlock::AutoRouteLink(Link &link) {
-    // Clear existing points
-    link.points.clear();
-
-    // Simple auto-routing logic (straight line with potential midpoints)
-    Point startPos;
-    Point endPos;
-
-    // Determine start position based on link type and ID
-    if (link.start.IsParameterRelated()) {
-        Parameter *param = FindParameter(link.start.id);
-        if (param) {
-            startPos = param->GetPosition();
-        }
-    } else if (link.start.IsBehaviorRelated()) {
-        Operation *op = FindOperation(link.start.id);
-        if (op) {
-            startPos = op->GetPosition();
-        }
-    }
-
-    // Determine end position based on link type and ID
-    if (link.end.IsParameterRelated()) {
-        Parameter *param = FindParameter(link.end.id);
-        if (param) {
-            endPos = param->GetPosition();
-        }
-    } else if (link.end.IsBehaviorRelated()) {
-        Operation *op = FindOperation(link.end.id);
-        if (op) {
-            endPos = op->GetPosition();
-        }
-    }
-
-    // Add start point
-    link.AddControlPoint(startPos);
-
-    // Add midpoints if needed
-    // For a simple orthogonal route, add a point that creates an "L" shape
-    if (std::abs(startPos.h - endPos.h) > 10.0f && std::abs(startPos.v - endPos.v) > 10.0f) {
-        link.AddControlPoint(Point(startPos.h, endPos.v));
-    }
-
-    // Add end point
-    link.AddControlPoint(endPos);
-
-    link.pointCount = static_cast<int>(link.points.size());
-}
-
 bool BehaviorBlock::RemoveElement(InterfaceElement *element) {
     if (!element) return false;
 
@@ -1626,66 +1577,6 @@ Rect InterfaceData::GetBoundingRect() const {
     bounds.ExpandToInclude(start.hStartPos, start.vStartPos);
 
     return bounds;
-}
-
-InterfaceData InterfaceData::CreateSubset(const std::vector<CK_ID> &blockIds) {
-    InterfaceData subset;
-
-    // Copy basic properties
-    subset.version = version;
-    subset.extraDataVersion = extraDataVersion;
-
-    // Find and copy specified blocks
-    for (CK_ID id : blockIds) {
-        BehaviorBlock *block = FindBehaviorBlock(id);
-        if (block) {
-            if (block == &scriptRoot) {
-                // Special handling for script root
-                subset.scriptRoot = scriptRoot;
-            } else {
-                subset.AddBehaviorBlock(*block);
-            }
-        }
-    }
-
-    // Filter links to only include those connecting blocks in the subset
-    std::set<CK_ID> includedIds(blockIds.begin(), blockIds.end());
-
-    // Filter script root links
-    auto &rootLinks = subset.scriptRoot.links;
-    rootLinks.erase(
-        std::remove_if(rootLinks.begin(), rootLinks.end(),
-                       [&includedIds](const Link &link) {
-                           return includedIds.find(link.start.id) == includedIds.end() ||
-                               includedIds.find(link.end.id) == includedIds.end();
-                       }),
-        rootLinks.end()
-    );
-    subset.scriptRoot.linkCount = static_cast<int>(rootLinks.size());
-
-    // Filter links in each block
-    for (auto &block : subset.behaviorBlocks) {
-        auto &links = block.links;
-        links.erase(
-            std::remove_if(links.begin(), links.end(),
-                           [&includedIds](const Link &link) {
-                               return includedIds.find(link.start.id) == includedIds.end() ||
-                                   includedIds.find(link.end.id) == includedIds.end();
-                           }),
-            links.end()
-        );
-        block.linkCount = static_cast<int>(links.size());
-    }
-
-    // Filter extra data to only include relevant entries
-    for (const auto &extra : extraData) {
-        if (includedIds.find(extra.id1) != includedIds.end() ||
-            includedIds.find(extra.id2) != includedIds.end()) {
-            subset.extraData.push_back(extra);
-        }
-    }
-
-    return subset;
 }
 
 const BehaviorBlock &InterfaceData::GetBehaviorBlockForContext(const SerializationContext &context) const {
