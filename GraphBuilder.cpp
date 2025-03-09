@@ -73,6 +73,8 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 
     // Configure parameter links
     ConfigureParameterLinks(rootBehavior);
+
+    m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
 BehaviorBlock &GraphBuilder::GetBehaviorBlock(CK_ID id) {

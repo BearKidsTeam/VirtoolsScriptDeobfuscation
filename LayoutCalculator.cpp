@@ -72,6 +72,8 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     // Set start information and recalculate positions
     DecorateStart(m_Data.scriptRoot, startVertical, blockHeight);
     RecalculateAbsolutePositions(m_Data.scriptRoot, script, 0.0f, 0.0f);
+
+    m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
 BehaviorBlock &LayoutCalculator::GetBehaviorBlock(CK_ID id) {
