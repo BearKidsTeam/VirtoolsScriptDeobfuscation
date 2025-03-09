@@ -1,16 +1,18 @@
 #pragma once
 
-#include <unordered_map>
+#include <vector>
 #include <queue>
+#include <unordered_map>
+#include <unordered_set>
+
 #include "InterfaceData.h"
-#include "GraphBuilder.h"
 
 class CKContext;
 class CKBehavior;
 
 /**
  * LayoutCalculator calculates the visual layout of a behavior tree.
- * It handles positioning and sizing of all elements.
+ * It handles positioning and sizing of all elements based on the constructed InterfaceData.
  */
 class LayoutCalculator {
 public:
@@ -18,17 +20,8 @@ public:
      * Constructor
      * @param target_data Reference to the interface data to populate
      * @param context Pointer to the CK context
-     * @param graph_builder Reference to the graph builder
      */
-    LayoutCalculator(InterfaceData &target_data, CKContext *context, GraphBuilder &graph_builder);
-
-    /**
-     * Sets start information for the behavior script
-     * @param script The script behavior
-     * @param verticalStartPos Vertical start position
-     * @param verticalSize Vertical size
-     */
-    void DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize);
+    LayoutCalculator(InterfaceData &target_data, CKContext *context);
 
     /**
      * Calculates the layout for the entire behavior tree
@@ -36,25 +29,12 @@ public:
      */
     void CalculateLayout(CKBehavior *script);
 
-    /**
-     * Recalculates absolute positions for behaviors
-     * @param behaviorBlock Behavior
-     * @param behavior CK behavior
-     * @param startHorizontal Starting horizontal position
-     * @param startVertical Starting vertical position
-     */
-    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
-                                      float startHorizontal, float startVertical);
-
 private:
     // Reference to the interface data
     InterfaceData &m_Data;
 
     // Pointer to the CK context
     CKContext *m_Context;
-
-    // Reference to the graph builder
-    GraphBuilder &m_GraphBuilder;
 
     // Maximum fix stack operations
     static const int MAX_FIX_STACK_OPS = 3;
@@ -71,18 +51,55 @@ private:
      * Edge structure for graph representation
      */
     struct Edge {
-        CK_ID sourceId = 0;         // Source node ID
-        CK_ID targetId = 0;         // Target node ID
-        int nextEdgeIndex = -1; // Next edge index from the same source
+        CK_ID sourceId = 0;       // Source node ID
+        CK_ID targetId = 0;       // Target node ID
+        int nextEdgeIndex = -1;   // Next edge index from the same source
     };
 
-    // Graph state
+    // Graph state for layout calculation
     std::unordered_map<CK_ID, Vertex> m_Vertices;
+    std::vector<CK_ID> m_VertexIds;
     std::unordered_map<CK_ID, int> m_DistanceFromRoot;
+    std::vector<CK_ID> m_DistanceIds;
     std::unordered_map<CK_ID, Rect> m_RequiredSize;
+    std::vector<CK_ID> m_SizeIds;
     std::unordered_map<CK_ID, int> m_PredecessorEdge;
+    std::vector<CK_ID> m_PredecessorIds;
     std::vector<Edge> m_Edges;
     std::unordered_set<CK_ID> m_MovedOperations;
+
+    /**
+     * Gets a behavior block by ID from interface data
+     * @param id Behavior ID
+     * @return Reference to the behavior block
+     */
+    BehaviorBlock &GetBehaviorBlock(CK_ID id);
+
+    /**
+     * Gets an operation by ID from interface data
+     * @param id Operation ID
+     * @return Reference to the operation
+     */
+    Operation &GetOperation(CK_ID id);
+
+    /**
+     * Checks if an ID is an operation
+     * @param id ID to check
+     * @return True if ID is an operation
+     */
+    bool IsOperation(CK_ID id) const;
+
+    /**
+     * Gets a vector of all behavior IDs
+     * @return Vector of behavior IDs
+     */
+    std::vector<CK_ID> GetBehaviorIds() const;
+
+    /**
+     * Gets a vector of all operation IDs
+     * @return Vector of operation IDs
+     */
+    std::vector<CK_ID> GetOperationIds() const;
 
     /**
      * Adds an edge to the graph
@@ -180,4 +197,22 @@ private:
      * @param isInputDirection Direction (true for inputs, false for outputs)
      */
     void CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
+
+    /**
+     * Sets start information for the behavior script
+     * @param script The script behavior
+     * @param verticalStartPos Vertical start position
+     * @param verticalSize Vertical size
+     */
+    void DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize);
+
+    /**
+     * Recalculates absolute positions for behaviors
+     * @param behaviorBlock Behavior
+     * @param behavior CK behavior
+     * @param startHorizontal Starting horizontal position
+     * @param startVertical Starting vertical position
+     */
+    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
+                                      float startHorizontal, float startVertical);
 };

@@ -2,6 +2,8 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+
 #include "InterfaceData.h"
 
 class CKContext;
@@ -31,6 +33,27 @@ public:
      */
     void BuildGraph(CKBehavior *rootBehavior);
 
+private:
+    // Reference to the interface data
+    InterfaceData &m_Data;
+
+    // Pointer to the CK context
+    CKContext *m_Context;
+
+    // Maps to track object relationships (for fast lookup)
+    std::unordered_map<CK_ID, int> m_BehaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
+    std::unordered_map<CK_ID, std::pair<int, int>> m_OperationMap; // Maps operation ID to <block index, op index>
+
+    // Sets to track parameters (for fast lookup)
+    std::unordered_set<CK_ID> m_InputParamSet;  // Input parameter IDs
+    std::unordered_set<CK_ID> m_OutputParamSet; // Output parameter IDs
+
+    // Vectors to maintain insertion order
+    std::vector<CK_ID> m_BehaviorIds;
+    std::vector<CK_ID> m_OperationIds;
+    std::vector<CK_ID> m_InputParamIds;
+    std::vector<CK_ID> m_OutputParamIds;
+
     /**
      * Gets a behavior block by ID
      * @param id Behavior ID
@@ -50,44 +73,15 @@ public:
      * @param id ID to check
      * @return True if ID is an operation
      */
-    bool IsOperation(CK_ID id);
-
-    /**
-     * Gets the behavior map for sharing with FlowLayout
-     */
-    const std::unordered_map<CK_ID, int>& GetBehaviorMap() const {
-        return m_BehaviorMap;
-    }
-
-    /**
-     * Gets the operation map for sharing with FlowLayout
-     */
-    const std::unordered_map<CK_ID, std::pair<int, int>>& GetOperationMap() const {
-        return m_OperationMap;
-    }
-
-private:
-    // Reference to the interface data
-    InterfaceData &m_Data;
-
-    // Pointer to the CK context
-    CKContext *m_Context;
-
-    // Maps to track object relationships
-    std::unordered_map<CK_ID, int> m_BehaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
-    std::unordered_map<CK_ID, std::pair<int, int>> m_OperationMap; // Maps operation ID to <block index, op index>
-
-    // Sets to track parameters
-    std::unordered_set<CK_ID> m_InputParams;  // Input parameter IDs
-    std::unordered_set<CK_ID> m_OutputParams; // Output parameter IDs
+    bool IsOperation(CK_ID id) const;
 
     /**
      * Structure to represent a parameter IO position
      */
     struct ParameterPosition {
-        CK_ID id;         // Parameter ID
-        int index;        // Parameter index
-        CK_ID behaviorId; // Parent behavior ID
+        CK_ID id = 0;         // Parameter ID
+        int index = 0;        // Parameter index
+        CK_ID behaviorId = 0; // Parent behavior ID
     };
 
     /**
@@ -155,4 +149,13 @@ private:
      * @param root Root behavior
      */
     void ConfigureParameterLinks(CKBehavior *root);
+
+    /**
+     * Creates a chain of links for output parameters
+     * @param inputChain Chain of input parameters
+     * @param outputChain Chain of output parameters
+     */
+    void ConfigureDirectParameterConnections(
+        const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &inputChain,
+        const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &outputChain);
 };
