@@ -242,28 +242,7 @@ struct Link {
      */
     Link(CK_ID linkId, LinkType linkType,
          const LinkEndpoint &startPoint, const LinkEndpoint &endPoint)
-        : id(linkId), type(linkType), start(startPoint), end(endPoint), pointCount(0) {
-    }
-
-    /**
-     * @brief Create a parameter link
-     */
-    static Link CreateParameter(CK_ID linkId, const LinkEndpoint &startPoint, const LinkEndpoint &endPoint) {
-        return {linkId, LINK_TYPE_PARAMETER, startPoint, endPoint};
-    }
-
-    /**
-     * @brief Create a behavior link
-     */
-    static Link CreateBehavior(CK_ID linkId, const LinkEndpoint &startPoint, const LinkEndpoint &endPoint) {
-        return {linkId, LINK_TYPE_BEHAVIOR, startPoint, endPoint};
-    }
-
-    /**
-     * @brief Create a parameter operation link
-     */
-    static Link CreateParameterOp(CK_ID linkId, const LinkEndpoint &startPoint, const LinkEndpoint &endPoint) {
-        return {linkId, LINK_TYPE_PARAMETER_OP, startPoint, endPoint};
+        : id(linkId), type(linkType), start(startPoint), end(endPoint) {
     }
 
     /**
