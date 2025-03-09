@@ -245,8 +245,7 @@ CKStateChunk *DecorateAndGenerateChunk(CKBehavior *behavior) {
     InterfaceData data;
 
     // Decorate the behavior into the interface data
-    Decorator decorator(data, behavior->GetCKContext());
-    decorator.Decorate(behavior);
+    Decorate(data, behavior);
 
     // Generate and return the chunk
     return GenerateInterfaceChunk(data, behavior);
