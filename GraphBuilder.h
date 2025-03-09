@@ -99,6 +99,13 @@ private:
     void DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth);
 
     /**
+     * Calculates the size of a behavior
+     * @param behaviorBlock Behavior
+     * @param behavior CK behavior
+     */
+    void CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior);
+
+    /**
      * Gets the position information for an input parameter
      * @param inputParam Input parameter
      * @param owner Output: Owner behavior

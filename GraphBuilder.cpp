@@ -86,6 +86,8 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
     behaviorBlock.depth = depth;
     behaviorBlock.isBehaviorGraph = behavior->GetType() != CKBEHAVIORTYPE_BASE;
 
+    CalculateBehaviorSize(behaviorBlock, behavior);
+
     // Track input parameters
     for (int i = 0, count = behavior->GetInputParameterCount(); i < count; ++i) {
         m_InputParams.insert(behavior->GetInputParameter(i)->GetID());
@@ -168,6 +170,24 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
             paramData.id = localParam->GetID();
             paramData.style = PARAM_STYLE_CLOSED;
             behaviorBlock.AddLocalParameter(paramData);
+        }
+    }
+}
+
+void GraphBuilder::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
+    if (behaviorBlock.depth > 0) {
+        int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
+        height = std::max(height, 1);
+
+        int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
+        width = std::max(width, int((strlen(behavior->GetName()) - 1) / 2.5) + 1);
+        width = std::max(width, 2);
+
+        behaviorBlock.size.hSize = (float) width * 20.0f;
+        behaviorBlock.size.vSize = (float) height * 20.0f;
+        if (behaviorBlock.isBehaviorGraph) {
+            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10;
+            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10;
         }
     }
 }
@@ -463,7 +483,7 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
 
             // Log warning if no connection found
             if (!connected) {
-                m_Context->OutputToConsoleEx("pin: can't connect %d <-> %d, source type is %d",
+                m_Context->OutputToConsoleEx((CKSTRING) "pin: can't connect %d <-> %d, source type is %d",
                                              inputParam->GetID(), sharedInput->GetID(), sharedInput->GetClassID());
             }
         }
@@ -514,7 +534,7 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
                     GetBehaviorBlock(sourcePos.behaviorId).AddLink(link);
                 } else {
                     // Log warning for other cases
-                    m_Context->OutputToConsoleEx("pout: can't connect %d <-> %d, dest type is %d",
+                    m_Context->OutputToConsoleEx((CKSTRING) "pout: can't connect %d <-> %d, dest type is %d",
                                                  outputParam->GetID(), destParam->GetID(), destParam->GetClassID());
                 }
             }
