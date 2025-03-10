@@ -113,16 +113,19 @@ void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavio
 
         CK_ID inParam1Id = operation->GetInParameter1()->GetID();
         if (m_InputParamSet.find(inParam1Id) == m_InputParamSet.end()) {
+            m_InputParams.push_back(inParam1Id);
             m_InputParamSet.insert(inParam1Id);
         }
 
         CK_ID inParam2Id = operation->GetInParameter2()->GetID();
         if (m_InputParamSet.find(inParam2Id) == m_InputParamSet.end()) {
+            m_InputParams.push_back(inParam2Id);
             m_InputParamSet.insert(inParam2Id);
         }
 
         CK_ID outParamId = operation->GetOutParameter()->GetID();
         if (m_OutputParamSet.find(outParamId) == m_OutputParamSet.end()) {
+            m_OutputParams.push_back(outParamId);
             m_OutputParamSet.insert(outParamId);
         }
     }
