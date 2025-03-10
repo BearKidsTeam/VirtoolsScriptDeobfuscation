@@ -234,7 +234,7 @@ private:
      * @param verticalStartPos Vertical start position
      * @param verticalSize Vertical size
      */
-    void DecorateStart(BehaviorData &script, float verticalStartPos, float verticalSize);
+    void SetStart(BehaviorData &script, float verticalStartPos, float verticalSize);
 
     /**
      * Recalculates absolute positions for behaviors

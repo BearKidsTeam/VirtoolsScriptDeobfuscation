@@ -55,7 +55,7 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     float startVertical = behaviorHeight / 2.0f;
 
     // Set start information and recalculate positions
-    DecorateStart(m_Data.rootBehavior, startVertical, behaviorHeight);
+    SetStart(m_Data.rootBehavior, startVertical, behaviorHeight);
     RecalculateAbsolutePositions(m_Data.rootBehavior, script, 0.0f, 0.0f);
 
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
@@ -614,12 +614,12 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
     }
 }
 
-void LayoutCalculator::DecorateStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
-    auto &start = m_Data.start;
-    start.id = script.id;
-    start.vSize = verticalSize;
-    start.vStartPos = verticalStartPos;
-    start.vStart = 0;
+void LayoutCalculator::SetStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
+    auto &header = m_Data.header;
+    header.id = script.id;
+    header.vSize = verticalSize;
+    header.vStartPos = verticalStartPos;
+    header.vStart = 0;
 }
 
 void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior,

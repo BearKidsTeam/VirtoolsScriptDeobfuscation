@@ -76,7 +76,7 @@ enum ExtraDataType {
 // Forward declarations for core classes
 struct Rect;
 struct Point;
-struct StartPoint;
+struct Header;
 struct LinkEndpoint;
 struct Link;
 struct Operation;
@@ -329,15 +329,15 @@ struct Rect : InterfaceElement {
 };
 
 /**
- * @struct StartPoint
- * @brief Represents the starting point of a behavior script
+ * @struct Header
+ * @brief Represents the header of a behavior script
  */
-struct StartPoint : InterfaceElement {
+struct Header : InterfaceElement {
     float vStart = 0.0f;            ///< Vertical offset where execution begins
     float hStartPos = 140.0f;       ///< Horizontal position of start
     float vStartPos = 0.0f;         ///< Vertical position of start
     float vSize = 0.0f;             ///< Vertical size of the start region
-    CKDWORD headerColor = 0xC8C8C8; ///< Color of the header bar
+    CKDWORD color = 0xC8C8C8;       ///< Color of the header bar
     void *snapshot = nullptr;       ///< Optional bitmap snapshot
 
     Point GetPosition() const;
@@ -882,8 +882,8 @@ public:
     // Core data
     //------------------------------------------------------
     CKDWORD version = 0x16;              ///< Interface chunk version
-    StartPoint start;                    ///< Start point of the script
-    BehaviorData rootBehavior;             ///< Root behavior
+    Header header;                       ///< Header of the script
+    BehaviorData rootBehavior;           ///< Root behavior
     std::vector<BehaviorData> behaviors; ///< Behavior in the tree
     int behaviorCount = 0;               ///< Number of behaviors
 

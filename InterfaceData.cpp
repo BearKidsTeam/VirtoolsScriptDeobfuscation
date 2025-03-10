@@ -218,12 +218,12 @@ void Rect::Offset(float horizontal, float vertical) {
     vPos += vertical;
 }
 
-// StartPoint implementations
-Point StartPoint::GetPosition() const {
+// Header implementations
+Point Header::GetPosition() const {
     return {hStartPos, vStartPos};
 }
 
-void StartPoint::SetPosition(float h, float v) {
+void Header::SetPosition(float h, float v) {
     hStartPos = h;
     vStartPos = v;
 }
@@ -273,19 +273,19 @@ void Link::AddControlPoint(const Point &point) {
 }
 
 void Link::InsertControlPoint(int index, const Point &point) {
-    if (index >= 0 && index <= points.size()) {
+    if (index >= 0 && index <= static_cast<int>(points.size())) {
         points.insert(points.begin() + index, point);
     }
 }
 
 void Link::RemoveControlPoint(int index) {
-    if (index >= 0 && index < points.size()) {
+    if (index >= 0 && index < static_cast<int>(points.size())) {
         points.erase(points.begin() + index);
     }
 }
 
 void Link::UpdateControlPoint(int index, const Point &point) {
-    if (index >= 0 && index < points.size()) {
+    if (index >= 0 && index < static_cast<int>(points.size())) {
         points[index] = point;
     }
 }
@@ -781,7 +781,7 @@ void InterfaceData::AddExtraData(const ExtraData &data) {
 
 void InterfaceData::Clear() {
     version = 0x16;
-    start = StartPoint();
+    header = Header();
     rootBehavior.Reset();
     behaviors.clear();
     behaviorCount = 0;
@@ -827,8 +827,8 @@ std::vector<InterfaceElement *> InterfaceData::FindElementsById(CK_ID id) {
     }
 
     // Check start point
-    if (start.id == id) {
-        result.push_back(&start);
+    if (header.id == id) {
+        result.push_back(&header);
     }
 
     // Check all behaviors
@@ -1111,22 +1111,22 @@ CKBOOL InterfaceData::LoadBehaviorHeader(SerializationContext &context, Behavior
         // Read start position
         const float startX = chunk->ReadFloat();
         const float startY = chunk->ReadFloat();
-        start.hStartPos = startX;
-        start.vStartPos = startY;
+        header.hStartPos = startX;
+        header.vStartPos = startY;
 
         // Read height
         const float height = chunk->ReadFloat();
-        start.vSize = height;
+        header.vSize = height;
 
         // Skip bitmap but store if needed
         BITMAP_HANDLE snapshot = chunk->ReadBitmap();
         if (snapshot) {
-            start.snapshot = snapshot; // TODO: Would need proper handling
+            header.snapshot = snapshot; // TODO: Would need proper handling
         }
 
         // Read header color if version >= 0x14
         if (context.version >= 0x14) {
-            start.headerColor = chunk->ReadDword();
+            header.color = chunk->ReadDword();
         }
     } else {
         // behavior specific data
@@ -1462,11 +1462,11 @@ CKBOOL InterfaceData::SaveBehaviorHeader(SerializationContext &context) {
         chunk->WriteDword(context.scriptIndex++); // index
         chunk->WriteFloat(behavior.rect.hPos);
         chunk->WriteFloat(behavior.rect.vPos);
-        chunk->WriteFloat(start.hStartPos);
-        chunk->WriteFloat(start.vStartPos);
-        chunk->WriteFloat(start.vSize);
-        chunk->WriteBitmap(start.snapshot); // header snapshot
-        chunk->WriteDword(start.headerColor);
+        chunk->WriteFloat(header.hStartPos);
+        chunk->WriteFloat(header.vStartPos);
+        chunk->WriteFloat(header.vSize);
+        chunk->WriteBitmap(header.snapshot); // header snapshot
+        chunk->WriteDword(header.color);
     } else {
         // Save behavior-specific data
         chunk->WriteDword(behavior.depth);
