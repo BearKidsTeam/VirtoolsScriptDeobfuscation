@@ -826,9 +826,8 @@ void InterfaceData::AddBehavior(BehaviorData &behavior) {
 }
 
 bool InterfaceData::RemoveBehavior(CK_ID behaviorId) {
-    auto it = std::find_if(behaviors.begin(), behaviors.end(),
+    const auto it = std::find_if(behaviors.begin(), behaviors.end(),
                            [behaviorId](const BehaviorData &behavior) { return behavior.id == behaviorId; });
-
     if (it != behaviors.end()) {
         NotifyObservers(&(*it), ElementAction::Removed);
         behaviors.erase(it);
@@ -877,7 +876,7 @@ void InterfaceData::RemoveObserver(ElementObserver *observer) {
     }
 }
 
-void InterfaceData::NotifyObservers(InterfaceElement *element, ElementAction action) {
+void InterfaceData::NotifyObservers(InterfaceElement *element, ElementAction action) const {
     for (auto *observer : observers) {
         switch (action) {
         case ElementAction::Added:
@@ -1005,8 +1004,7 @@ std::vector<BehaviorData *> InterfaceData::GetSubTree(CK_ID rootId) {
 
         // Find all links from this behavior
         auto links = FindLinksConnectedTo(currentId);
-
-        for (auto *link : links) {
+        for (const auto *link : links) {
             // If the link ends in a behavior we haven't visited
             if (link->end.IsBehaviorRelated() && visited.find(link->end.id) == visited.end()) {
                 BehaviorData *connectedBehavior = FindBehavior(link->end.id);
@@ -1024,9 +1022,8 @@ std::vector<BehaviorData *> InterfaceData::GetSubTree(CK_ID rootId) {
 
 BehaviorData *InterfaceData::FindParentBehavior(CK_ID behaviorId) {
     // A behavior's parent is connected to it via a behavior link
-    auto links = FindLinksConnectedTo(behaviorId);
-
-    for (auto *link : links) {
+    const auto links = FindLinksConnectedTo(behaviorId);
+    for (const auto *link : links) {
         if (link->IsBehaviorLink() && link->end.id == behaviorId) {
             return FindBehavior(link->start.id);
         }
@@ -1039,9 +1036,8 @@ std::vector<BehaviorData *> InterfaceData::FindChildBehaviors(CK_ID behaviorId) 
     std::vector<BehaviorData *> children;
 
     // Children are connected via behavior links from this behavior
-    auto links = FindLinksConnectedTo(behaviorId);
-
-    for (auto *link : links) {
+    const auto links = FindLinksConnectedTo(behaviorId);
+    for (const auto *link : links) {
         if (link->IsBehaviorLink() && link->start.id == behaviorId) {
             BehaviorData *child = FindBehavior(link->end.id);
             if (child) {
@@ -1062,19 +1058,18 @@ bool InterfaceData::HasPath(CK_ID startId, CK_ID endId) {
     queue.push(startId);
 
     while (!queue.empty()) {
-        CK_ID currentId = queue.front();
+        CK_ID id = queue.front();
         queue.pop();
 
-        if (currentId == endId) {
+        if (id == endId) {
             return true;
         }
 
         // Find all links from this behavior
-        auto links = FindLinksConnectedTo(currentId);
-
-        for (auto *link : links) {
+        auto links = FindLinksConnectedTo(id);
+        for (const auto *link : links) {
             // Only follow behavior links
-            if (link->IsBehaviorLink() && link->start.id == currentId) {
+            if (link->IsBehaviorLink() && link->start.id == id) {
                 CK_ID nextId = link->end.id;
 
                 if (visited.find(nextId) == visited.end()) {
@@ -1098,27 +1093,26 @@ std::vector<CK_ID> InterfaceData::FindPath(CK_ID startId, CK_ID endId) {
     queue.push(startId);
 
     bool found = false;
-
     while (!queue.empty() && !found) {
-        CK_ID currentId = queue.front();
+        CK_ID id = queue.front();
         queue.pop();
 
-        if (currentId == endId) {
+        if (id == endId) {
             found = true;
             break;
         }
 
         // Find all links from this behavior
-        auto links = FindLinksConnectedTo(currentId);
+        auto links = FindLinksConnectedTo(id);
 
         for (auto *link : links) {
             // Only follow behavior links
-            if (link->IsBehaviorLink() && link->start.id == currentId) {
+            if (link->IsBehaviorLink() && link->start.id == id) {
                 CK_ID nextId = link->end.id;
 
                 if (visited.find(nextId) == visited.end()) {
                     visited.insert(nextId);
-                    cameFrom[nextId] = currentId;
+                    cameFrom[nextId] = id;
                     queue.push(nextId);
                 }
             }
@@ -1751,7 +1745,7 @@ void InterfaceData::SaveExtraData(SerializationContext &context) {
                     value1 == 10 || value1 == 11) {
                     chunk->WriteObjectID(sub.id2);
                 } else if (!sub.buffer.empty()) {
-                    chunk->WriteBuffer(sub.buffer.size(), (void *) (sub.buffer.data()));
+                    chunk->WriteBuffer(sub.buffer.size(), (void *) sub.buffer.data());
                 } else {
                     // Write empty buffer
                     chunk->WriteBuffer(0, nullptr);

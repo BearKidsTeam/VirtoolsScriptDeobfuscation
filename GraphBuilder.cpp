@@ -30,7 +30,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     // Process behaviors in breadth-first order
     while (!behaviorQueue.empty()) {
         auto currentPair = behaviorQueue.front();
-        CKBehavior *currentBehavior = currentPair.first;
+        CKBehavior *beh = currentPair.first;
         const int depth = currentPair.second;
         behaviorQueue.pop();
 
@@ -38,62 +38,39 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
         BehaviorData *currentBehaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.scriptRoot;
 
         // Store behavior ID and mapping
-        CK_ID behaviorId = currentBehavior->GetID();
+        CK_ID behaviorId = beh->GetID();
         m_BehaviorIds.push_back(behaviorId);
         m_BehaviorMap[behaviorId] = depth > 0 ? static_cast<int>(m_Data.behaviors.size()) - 1 : -1;
 
         // Map operation IDs to indices
-        const int operationCount = currentBehavior->GetParameterOperationCount();
+        const int operationCount = beh->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
-            CKParameterOperation *operation = currentBehavior->GetParameterOperation(i);
+            CKParameterOperation *operation = beh->GetParameterOperation(i);
             CK_ID operationId = operation->GetID();
             m_OperationIds.push_back(operationId);
             m_OperationMap[operationId] = std::make_pair(depth > 0 ? m_Data.behaviors.size() - 1 : -1, i);
         }
 
-        // Decorate the behavior
-        DecorateBehavior(*currentBehaviorData, currentBehavior, depth);
+        // Set up the behavior
+        SetupBehavior(*currentBehaviorData, beh, depth);
 
         // Enqueue sub-behaviors for processing
-        const int subBehaviorCount = currentBehavior->GetSubBehaviorCount();
+        const int subBehaviorCount = beh->GetSubBehaviorCount();
         for (int i = 0; i < subBehaviorCount; ++i) {
-            CKBehavior *subBehavior = currentBehavior->GetSubBehavior(i);
+            CKBehavior *subBehavior = beh->GetSubBehavior(i);
             behaviorQueue.emplace(subBehavior, depth + 1);
         }
     }
 
     // Configure parameter links
-    ConfigureParameterLinks(rootBehavior);
+    ConfigureParameterLinks();
 
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
 BehaviorData &GraphBuilder::GetBehavior(CK_ID id) {
     int index = m_BehaviorMap[id];
-    return (index >= 0) ? m_Data.behaviors[index] : m_Data.scriptRoot;
-}
-
-Operation &GraphBuilder::GetOperation(CK_ID id) {
-    auto &opInfo = m_OperationMap[id];
-    int bbIndex = opInfo.first;
-    int opIndex = opInfo.second;
-
-    BehaviorData *behavior = nullptr;
-    if (bbIndex >= 0) {
-        if (bbIndex < static_cast<int>(m_Data.behaviors.size())) {
-            behavior = &m_Data.behaviors[bbIndex];
-        }
-    } else {
-        behavior = &m_Data.scriptRoot;
-    }
-
-    if (behavior && opIndex >= 0 && opIndex < behavior->operationCount) {
-        return behavior->operations[opIndex];
-    }
-
-    // If not found, log and throw
-    m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation %d not found", id);
-    throw std::runtime_error("Operation not found");
+    return index >= 0 ? m_Data.behaviors[index] : m_Data.scriptRoot;
 }
 
 bool GraphBuilder::IsOperation(CK_ID id) const {
@@ -101,7 +78,7 @@ bool GraphBuilder::IsOperation(CK_ID id) const {
     return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
 }
 
-void GraphBuilder::DecorateBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth) {
+void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth) {
     behaviorData.id = behavior->GetID();
     behaviorData.folded = depth > 0;
     behaviorData.depth = depth;
@@ -204,17 +181,14 @@ void GraphBuilder::DecorateBehavior(BehaviorData &behaviorData, CKBehavior *beha
         // Add operations
         for (int i = 0, count = behavior->GetParameterOperationCount(); i < count; ++i) {
             CKParameterOperation *operation = behavior->GetParameterOperation(i);
-            Operation operationData;
-            operationData.id = operation->GetID();
+            Operation operationData(operation->GetID());
             behaviorData.AddOperation(operationData);
         }
 
         // Add local parameters
         for (int i = 0, count = behavior->GetLocalParameterCount(); i < count; ++i) {
             CKParameterLocal *localParam = behavior->GetLocalParameter(i);
-            Parameter paramData;
-            paramData.id = localParam->GetID();
-            paramData.style = PARAM_STYLE_CLOSED;
+            Parameter paramData(localParam->GetID(), PARAM_STYLE_CLOSED);
             behaviorData.AddLocalParameter(paramData);
         }
     }
@@ -382,17 +356,14 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     }
 
     // Create a new shortcut parameter
-    Parameter paramData;
+    Parameter paramData(sourceId, PARAM_STYLE_CLOSED);
     paramData.sourceId = sourceId;
-    paramData.hPos = paramData.vPos = 0;
-    paramData.id = sourceId;
-    paramData.style = PARAM_STYLE_CLOSED;
     behavior.AddSharedParameter(paramData);
 
     return {behaviorId, behavior.sharedParamCount - 1, behaviorId};
 }
 
-void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
+void GraphBuilder::ConfigureParameterLinks() {
     // Maps to track parameter chains
     std::unordered_map<CK_ID, std::vector<ParameterPosition>> inputChain;
     std::unordered_map<CK_ID, std::vector<ParameterPosition>> outputChain;
@@ -403,10 +374,10 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
         if (!inputParam) continue;
 
         auto &positionChain = inputChain[id];
-        CKBehavior *currentBehavior = nullptr;
+        CKBehavior *beh = nullptr;
 
         try {
-            positionChain.push_back(GetInputParameterPosition(inputParam, &currentBehavior));
+            positionChain.push_back(GetInputParameterPosition(inputParam, &beh));
 
             LinkEndpoint lastEndpoint = {
                 positionChain.back().id,
@@ -415,11 +386,11 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
             };
 
             // Create chain of links for input parameters
-            while (currentBehavior && currentBehavior->GetInputParameterPosition(inputParam) != -1) {
+            while (beh && beh->GetInputParameterPosition(inputParam) != -1) {
                 positionChain.push_back({
-                    currentBehavior->GetID(),
-                    currentBehavior->GetInputParameterPosition(inputParam),
-                    currentBehavior->GetParent()->GetID()
+                    beh->GetID(),
+                    beh->GetInputParameterPosition(inputParam),
+                    beh->GetParent()->GetID()
                 });
 
                 Link link;
@@ -429,8 +400,8 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
                 link.end = lastEndpoint;
                 lastEndpoint = link.start;
 
-                GetBehavior(currentBehavior->GetID()).AddLink(link);
-                currentBehavior = currentBehavior->GetParent();
+                GetBehavior(beh->GetID()).AddLink(link);
+                beh = beh->GetParent();
             }
         } catch (const std::exception &e) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error processing input parameter %d: %s", id, e.what());
@@ -443,19 +414,19 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
         if (!outputParam) continue;
 
         auto &positionChain = outputChain[id];
-        CKBehavior *currentBehavior = nullptr;
+        CKBehavior *beh = nullptr;
 
         try {
-            positionChain.push_back(GetOutputParameterPosition(outputParam, &currentBehavior));
+            positionChain.push_back(GetOutputParameterPosition(outputParam, &beh));
 
             LinkEndpoint lastEndpoint = {positionChain.back().id, positionChain.back().index, ENDPOINT_POUT};
 
             // Create chain of links for output parameters
-            while (currentBehavior && currentBehavior->GetOutputParameterPosition(outputParam) != -1) {
+            while (beh && beh->GetOutputParameterPosition(outputParam) != -1) {
                 positionChain.push_back({
-                    currentBehavior->GetID(),
-                    currentBehavior->GetOutputParameterPosition(outputParam),
-                    currentBehavior->GetParent()->GetID()
+                    beh->GetID(),
+                    beh->GetOutputParameterPosition(outputParam),
+                    beh->GetParent()->GetID()
                 });
 
                 Link link;
@@ -465,8 +436,8 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
                 link.start = lastEndpoint;
                 lastEndpoint = link.end;
 
-                GetBehavior(currentBehavior->GetID()).AddLink(link);
-                currentBehavior = currentBehavior->GetParent();
+                GetBehavior(beh->GetID()).AddLink(link);
+                beh = beh->GetParent();
             }
         } catch (const std::exception &e) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error processing output parameter %d: %s", id, e.what());
@@ -486,8 +457,8 @@ void GraphBuilder::ConfigureDirectParameterConnections(
         if (!inputParam) continue;
 
         try {
-            CKBehavior *currentBehavior = nullptr;
-            auto position = GetInputParameterPosition(inputParam, &currentBehavior);
+            CKBehavior *beh = nullptr;
+            auto position = GetInputParameterPosition(inputParam, &beh);
             const auto &inputPositions = inputChain.at(inputParam->GetID());
 
             // Direct source connection

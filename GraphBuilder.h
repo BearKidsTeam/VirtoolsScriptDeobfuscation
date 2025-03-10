@@ -62,13 +62,6 @@ private:
     BehaviorData &GetBehavior(CK_ID id);
 
     /**
-     * Gets an operation by ID
-     * @param id Operation ID
-     * @return Reference to the operation
-     */
-    Operation &GetOperation(CK_ID id);
-
-    /**
      * Checks if an ID is an operation
      * @param id ID to check
      * @return True if ID is an operation
@@ -85,12 +78,12 @@ private:
     };
 
     /**
-     * Decorates a single behavior
+     * Set up a single behavior
      * @param behaviorData Behavior data
      * @param behavior CK behavior
      * @param depth Depth in the tree
      */
-    void DecorateBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth);
+    void SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth);
 
     /**
      * Calculates the size of a behavior
@@ -146,9 +139,8 @@ private:
 
     /**
      * Configures parameter links for a behavior tree
-     * @param root Root behavior
      */
-    void ConfigureParameterLinks(CKBehavior *root);
+    void ConfigureParameterLinks();
 
     /**
      * Connects input parameters to their sources

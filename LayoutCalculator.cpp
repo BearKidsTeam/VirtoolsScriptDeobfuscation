@@ -64,7 +64,7 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) {
+BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) const {
     // Check if the ID is the script root
     if (m_Data.scriptRoot.id == id) {
         return m_Data.scriptRoot;
@@ -81,7 +81,7 @@ BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) {
     throw std::runtime_error("Behavior not found with ID: " + std::to_string(id));
 }
 
-Operation &LayoutCalculator::GetOperation(CK_ID id) {
+Operation &LayoutCalculator::GetOperation(CK_ID id) const {
     // First check script root operations
     for (auto &op : m_Data.scriptRoot.operations) {
         if (op.id == id) {
@@ -345,12 +345,12 @@ float LayoutCalculator::CalculateBehaviorPositions(BehaviorData &behaviorGraph, 
     return size.vSize / 2;
 }
 
-void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, Point position) {
+void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, const Point &position) {
     parameter.hPos = static_cast<int>(roundf(position.h));
     parameter.vPos = static_cast<int>(roundf(position.v));
 }
 
-void LayoutCalculator::MoveOperationToPosition(Operation &operation, Point position) {
+void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point &position) {
     operation.hPos = (position.h - 1) * 20;
     operation.vPos = (position.v - 2) * 20;
 }

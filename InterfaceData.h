@@ -659,6 +659,8 @@ struct Operation : InterfaceElement {
 
     Operation() = default;
 
+    explicit Operation(CK_ID opId) : InterfaceElement(opId) {}
+
     Operation(CK_ID opId, float h, float v) : InterfaceElement(opId), hPos(h), vPos(v) {}
 
     /**
@@ -750,6 +752,8 @@ struct Parameter : InterfaceElement {
     CK_ID sourceId = 0;                      ///< Source parameter ID for shortcuts
 
     Parameter() = default;
+
+    Parameter(CK_ID paramId, ParameterStyle paramStyle) : InterfaceElement(paramId), style(paramStyle) {}
 
     Parameter(CK_ID paramId, int h, int v, ParameterStyle paramStyle = PARAM_STYLE_NAME)
         : InterfaceElement(paramId), hPos(h), vPos(v), style(paramStyle) {}
@@ -1120,7 +1124,7 @@ public:
     /**
      * @brief Notifies all observers of element changes
      */
-    void NotifyObservers(InterfaceElement *element, ElementAction action);
+    void NotifyObservers(InterfaceElement *element, ElementAction action) const;
 
     //------------------------------------------------------
     // Advanced Querying

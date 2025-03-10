@@ -37,7 +37,7 @@ private:
     CKContext *m_Context;
 
     // Maximum fix stack operations
-    static const int MAX_FIX_STACK_OPS = 3;
+    static constexpr int MAX_FIX_STACK_OPS = 3;
 
     /**
      * Vertex structure for graph representation
@@ -73,14 +73,14 @@ private:
      * @param id Behavior ID
      * @return Reference to the behavior
      */
-    BehaviorData &GetBehavior(CK_ID id);
+    BehaviorData &GetBehavior(CK_ID id) const;
 
     /**
      * Gets an operation by ID from interface data
      * @param id Operation ID
      * @return Reference to the operation
      */
-    Operation &GetOperation(CK_ID id);
+    Operation &GetOperation(CK_ID id) const;
 
     /**
      * Checks if an ID is an operation
@@ -158,14 +158,14 @@ private:
      * @param parameter Parameter
      * @param position Position
      */
-    void MoveParameterToPosition(Parameter &parameter, Point position);
+    void MoveParameterToPosition(Parameter &parameter, const Point &position);
 
     /**
      * Moves an operation to a position
      * @param operation Operation
      * @param position Position
      */
-    void MoveOperationToPosition(Operation &operation, Point position);
+    void MoveOperationToPosition(Operation &operation, const Point &position);
 
     /**
      * Gets the input position for an interface
