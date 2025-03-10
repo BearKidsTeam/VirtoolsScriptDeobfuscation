@@ -34,6 +34,17 @@ public:
     void BuildGraph(CKBehavior *rootBehavior);
 
 private:
+    /**
+     * Structure to represent a parameter IO position
+     */
+    struct ParameterPosition {
+        CK_ID id = 0;         // Parameter ID
+        int index = 0;        // Parameter index
+        CK_ID behaviorId = 0; // Parent behavior ID
+    };
+
+    using ParameterChain = std::unordered_map<CK_ID, std::vector<ParameterPosition>>;
+
     // Reference to the interface data
     InterfaceData &m_Data;
 
@@ -67,15 +78,6 @@ private:
      * @return True if ID is an operation
      */
     bool IsOperation(CK_ID id) const;
-
-    /**
-     * Structure to represent a parameter IO position
-     */
-    struct ParameterPosition {
-        CK_ID id = 0;         // Parameter ID
-        int index = 0;        // Parameter index
-        CK_ID behaviorId = 0; // Parent behavior ID
-    };
 
     /**
      * Set up a single behavior
@@ -147,7 +149,5 @@ private:
      * @param inputChain Chain of input parameters
      * @param outputChain Chain of output parameters
      */
-    void ConfigureDirectParameterConnections(
-        const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &inputChain,
-        const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &outputChain);
+    void ConfigureDirectParameterConnections(const ParameterChain &inputChain, const ParameterChain &outputChain);
 };

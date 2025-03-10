@@ -448,9 +448,8 @@ void GraphBuilder::ConfigureParameterLinks() {
     ConfigureDirectParameterConnections(inputChain, outputChain);
 }
 
-void GraphBuilder::ConfigureDirectParameterConnections(
-    const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &inputChain,
-    const std::unordered_map<CK_ID, std::vector<ParameterPosition>> &outputChain) {
+void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inputChain,
+                                                       const ParameterChain &outputChain) {
     // Connect input parameters to their sources
     for (const auto &id : m_InputParamIds) {
         auto *inputParam = (CKParameterIn *) m_Context->GetObject(id);
