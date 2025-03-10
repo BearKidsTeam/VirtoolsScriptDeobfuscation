@@ -769,8 +769,8 @@ bool InterfaceData::RemoveBehavior(CK_ID behaviorId) {
 }
 
 BehaviorData *InterfaceData::FindBehavior(CK_ID id) {
-    if (scriptRoot.id == id) {
-        return &scriptRoot;
+    if (rootBehavior.id == id) {
+        return &rootBehavior;
     }
 
     const auto it = std::find_if(behaviors.begin(), behaviors.end(),
@@ -785,7 +785,7 @@ void InterfaceData::AddExtraData(const ExtraData &data) {
 void InterfaceData::Clear() {
     version = 0x16;
     start = StartPoint();
-    scriptRoot.Reset();
+    rootBehavior.Reset();
     behaviors.clear();
     behaviorCount = 0;
     extraDataVersion = 0;
@@ -825,8 +825,8 @@ std::vector<InterfaceElement *> InterfaceData::FindElementsById(CK_ID id) {
     std::vector<InterfaceElement *> result;
 
     // Check script root
-    if (scriptRoot.id == id) {
-        result.push_back(&scriptRoot);
+    if (rootBehavior.id == id) {
+        result.push_back(&rootBehavior);
     }
 
     // Check start point
@@ -885,7 +885,7 @@ std::vector<InterfaceElement *> InterfaceData::FindElementsAt(const Point &posit
     }
 
     // Check script root
-    auto rootElements = scriptRoot.FindElementsAt(position, tolerance);
+    auto rootElements = rootBehavior.FindElementsAt(position, tolerance);
     elements.insert(elements.end(), rootElements.begin(), rootElements.end());
 
     return elements;
@@ -895,7 +895,7 @@ std::vector<Link *> InterfaceData::FindLinksConnectedTo(CK_ID objId) {
     std::vector<Link *> connectedLinks;
 
     // Check script root links
-    for (auto &link : scriptRoot.links) {
+    for (auto &link : rootBehavior.links) {
         if (link.start.id == objId || link.end.id == objId) {
             connectedLinks.push_back(&link);
         }
@@ -1069,11 +1069,11 @@ std::vector<CK_ID> InterfaceData::FindPath(CK_ID startId, CK_ID endId) {
 }
 
 const BehaviorData &InterfaceData::GetBehaviorForContext(const SerializationContext &context) const {
-    return !context.isNotScript ? scriptRoot : behaviors[context.behaviorIndex];
+    return !context.isNotScript ? rootBehavior : behaviors[context.behaviorIndex];
 }
 
 BehaviorData &InterfaceData::GetBehaviorForContext(SerializationContext &context) {
-    return !context.isNotScript ? scriptRoot : behaviors[context.behaviorIndex];
+    return !context.isNotScript ? rootBehavior : behaviors[context.behaviorIndex];
 }
 
 CKBOOL InterfaceData::LoadBehaviorHeader(SerializationContext &context, BehaviorData &behavior) {
@@ -1737,7 +1737,7 @@ CKERROR InterfaceData::LoadFromChunk(CKBehavior *behavior, CKStateChunk *chunk) 
         }
 
         context.behaviorIndex = i - 1;
-        BehaviorData *targetBehavior = (i == 0) ? &scriptRoot : &behaviors[i - 1];
+        BehaviorData *targetBehavior = (i == 0) ? &rootBehavior : &behaviors[i - 1];
 
         if (LoadBehaviorHeader(context, *targetBehavior)) {
             if (!(context.flags & 0x8000)) {

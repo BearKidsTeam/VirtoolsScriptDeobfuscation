@@ -54,16 +54,16 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     float startVertical = behaviorHeight / 2.0f;
 
     // Set start information and recalculate positions
-    DecorateStart(m_Data.scriptRoot, startVertical, behaviorHeight);
-    RecalculateAbsolutePositions(m_Data.scriptRoot, script, 0.0f, 0.0f);
+    DecorateStart(m_Data.rootBehavior, startVertical, behaviorHeight);
+    RecalculateAbsolutePositions(m_Data.rootBehavior, script, 0.0f, 0.0f);
 
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
 BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) const {
     // Check if the ID is the script root
-    if (m_Data.scriptRoot.id == id) {
-        return m_Data.scriptRoot;
+    if (m_Data.rootBehavior.id == id) {
+        return m_Data.rootBehavior;
     }
 
     // Search for the behavior in the behaviors
@@ -79,7 +79,7 @@ BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) const {
 
 Operation &LayoutCalculator::GetOperation(CK_ID id) const {
     // First check script root operations
-    for (auto &op : m_Data.scriptRoot.operations) {
+    for (auto &op : m_Data.rootBehavior.operations) {
         if (op.id == id) {
             return op;
         }
@@ -107,7 +107,7 @@ std::vector<CK_ID> LayoutCalculator::GetBehaviorIds() const {
     std::vector<CK_ID> behaviorIds;
 
     // Add script root
-    behaviorIds.push_back(m_Data.scriptRoot.id);
+    behaviorIds.push_back(m_Data.rootBehavior.id);
 
     // Add all behaviors
     for (const auto &behavior : m_Data.behaviors) {
@@ -121,8 +121,8 @@ std::vector<CK_ID> LayoutCalculator::GetOperationIds() const {
     std::vector<CK_ID> operationIds;
 
     // Add script root operations
-    operationIds.reserve(m_Data.scriptRoot.operations.size());
-    for (const auto &op : m_Data.scriptRoot.operations) {
+    operationIds.reserve(m_Data.rootBehavior.operations.size());
+    for (const auto &op : m_Data.rootBehavior.operations) {
         operationIds.push_back(op.id);
     }
 

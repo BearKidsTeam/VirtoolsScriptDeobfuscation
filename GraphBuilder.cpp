@@ -31,7 +31,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
         behaviorQueue.pop();
 
         // Create a new behavior data if not the root
-        BehaviorData *behaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.scriptRoot;
+        BehaviorData *behaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.rootBehavior;
 
         // Store behavior ID and mapping
         CK_ID behaviorId = beh->GetID();
@@ -64,7 +64,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 
 BehaviorData &GraphBuilder::GetBehaviorData(CK_ID id) {
     const int index = m_BehaviorMap[id];
-    return index >= 0 ? m_Data.behaviors[index] : m_Data.scriptRoot;
+    return index >= 0 ? m_Data.behaviors[index] : m_Data.rootBehavior;
 }
 
 bool GraphBuilder::IsOperation(CK_ID id) const {

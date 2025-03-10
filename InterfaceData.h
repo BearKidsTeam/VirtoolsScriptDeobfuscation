@@ -884,7 +884,7 @@ public:
     //------------------------------------------------------
     CKDWORD version = 0x16;              ///< Interface chunk version
     StartPoint start;                    ///< Start point of the script
-    BehaviorData scriptRoot;             ///< Root behavior
+    BehaviorData rootBehavior;             ///< Root behavior
     std::vector<BehaviorData> behaviors; ///< Behavior in the tree
     int behaviorCount = 0;               ///< Number of behaviors
 
