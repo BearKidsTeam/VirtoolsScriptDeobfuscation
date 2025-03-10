@@ -241,6 +241,10 @@ bool LinkEndpoint::IsBehaviorInput() const {
     return type == ENDPOINT_BIN || type == ENDPOINT_START_BIN;
 }
 
+bool LinkEndpoint::IsStartBehaviorInput() const {
+    return type == ENDPOINT_START_BIN;
+}
+
 bool LinkEndpoint::IsBehaviorOutput() const {
     return type == ENDPOINT_BOUT;
 }

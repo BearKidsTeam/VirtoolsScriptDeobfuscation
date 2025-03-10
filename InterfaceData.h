@@ -379,6 +379,11 @@ struct LinkEndpoint : InterfaceElement {
     bool IsBehaviorInput() const;
 
     /**
+     * @brief Checks if this endpoint is a "start" behavior input
+     */
+    bool IsStartBehaviorInput() const;
+
+    /**
      * @brief Checks if this endpoint is a behavior output
      */
     bool IsBehaviorOutput() const;
@@ -738,24 +743,24 @@ public:
  * @brief Represents a behavior in the tree
  */
 struct BehaviorData : InterfaceElement {
-    bool folded = false;          ///< Whether the block is collapsed
+    bool folded = false;          ///< Whether the behavior is collapsed
     CKDWORD depth = 0;            ///< Depth in the behavior hierarchy
-    Rect size;                    ///< Size and position of the block
+    Rect size;                    ///< Size and position of the behavior
     float hExpandSize = 0.0f;     ///< Expanded horizontal size
     float vExpandSize = 0.0f;     ///< Expanded vertical size
     bool isBehaviorGraph = false; ///< Whether this is a behavior graph
 
     // Links
     int linkCount = 0;       ///< Number of links
-    std::vector<Link> links; ///< Links within this block
+    std::vector<Link> links; ///< Links within this behavior
 
     // Operations
     int operationCount = 0;            ///< Number of operations
-    std::vector<Operation> operations; ///< Operations within this block
+    std::vector<Operation> operations; ///< Operations within this behavior
 
     // Comments
     int commentCount = 0;          ///< Number of comments
-    std::vector<Comment> comments; ///< Comments within this block
+    std::vector<Comment> comments; ///< Comments within this behavior
 
     // Parameters
     int localParamCount = 0;            ///< Number of local parameters
