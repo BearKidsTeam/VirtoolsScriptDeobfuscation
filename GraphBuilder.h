@@ -125,7 +125,7 @@ private:
      * @param parameter Parameter
      * @return Owner behavior
      */
-    CKBehavior *GetParameterOwnerBehavior(CKParameter *parameter);
+    CKBehavior *GetParameterOwner(CKParameter *parameter);
 
     /**
      * Gets a shortcut parameter position

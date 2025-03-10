@@ -25,13 +25,13 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 
     // Process behaviors in breadth-first order
     while (!behaviorQueue.empty()) {
-        auto currentPair = behaviorQueue.front();
-        CKBehavior *beh = currentPair.first;
-        const int depth = currentPair.second;
+        const auto pair = behaviorQueue.front();
+        CKBehavior *beh = pair.first;
+        const int depth = pair.second;
         behaviorQueue.pop();
 
         // Create a new behavior data if not the root
-        BehaviorData *currentBehaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.scriptRoot;
+        BehaviorData *behaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.scriptRoot;
 
         // Store behavior ID and mapping
         CK_ID behaviorId = beh->GetID();
@@ -46,7 +46,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
         }
 
         // Set up the behavior
-        SetupBehavior(*currentBehaviorData, beh, depth);
+        SetupBehavior(*behaviorData, beh, depth);
 
         // Enqueue sub-behaviors for processing
         const int subBehaviorCount = beh->GetSubBehaviorCount();
@@ -63,7 +63,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
 }
 
 BehaviorData &GraphBuilder::GetBehavior(CK_ID id) {
-    int index = m_BehaviorMap[id];
+    const int index = m_BehaviorMap[id];
     return index >= 0 ? m_Data.behaviors[index] : m_Data.scriptRoot;
 }
 
@@ -81,60 +81,84 @@ void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavio
     CalculateBehaviorSize(behaviorData, behavior);
 
     // Track input parameters
-    for (int i = 0, count = behavior->GetInputParameterCount(); i < count; ++i) {
-        CK_ID paramId = behavior->GetInputParameter(i)->GetID();
-        if (m_InputParamSet.find(paramId) == m_InputParamSet.end()) {
-            m_InputParams.push_back(paramId);
-            m_InputParamSet.insert(paramId);
+    const int inputParamCount = behavior->GetInputParameterCount();
+    for (int i = 0; i < inputParamCount; ++i) {
+        CKParameterIn *inputParam = behavior->GetInputParameter(i);
+        if (inputParam) {
+            CK_ID paramId = inputParam->GetID();
+            if (m_InputParamSet.find(paramId) == m_InputParamSet.end()) {
+                m_InputParams.push_back(paramId);
+                m_InputParamSet.insert(paramId);
+            }
         }
     }
 
     // Track output parameters
-    for (int i = 0, count = behavior->GetOutputParameterCount(); i < count; ++i) {
-        CK_ID paramId = behavior->GetOutputParameter(i)->GetID();
-        if (m_OutputParamSet.find(paramId) == m_OutputParamSet.end()) {
-            m_OutputParams.push_back(paramId);
-            m_OutputParamSet.insert(paramId);
+    const int outputParamCount = behavior->GetOutputParameterCount();
+    for (int i = 0; i < outputParamCount; ++i) {
+        CKParameterOut *outputParam = behavior->GetOutputParameter(i);
+        if (outputParam) {
+            CK_ID paramId = outputParam->GetID();
+            if (m_OutputParamSet.find(paramId) == m_OutputParamSet.end()) {
+                m_OutputParams.push_back(paramId);
+                m_OutputParamSet.insert(paramId);
+            }
         }
     }
 
     // Track target parameter if used
     if (behavior->IsUsingTarget()) {
-        CK_ID paramId = behavior->GetTargetParameter()->GetID();
-        if (m_InputParamSet.find(paramId) == m_InputParamSet.end()) {
-            m_InputParams.push_back(paramId);
-            m_InputParamSet.insert(paramId);
+        CKParameterIn *targetParam = behavior->GetTargetParameter();
+        if (targetParam) {
+            CK_ID paramId = targetParam->GetID();
+            if (m_InputParamSet.find(paramId) == m_InputParamSet.end()) {
+                m_InputParams.push_back(paramId);
+                m_InputParamSet.insert(paramId);
+            }
         }
     }
 
     // Track operation parameters
-    for (int i = 0, count = behavior->GetParameterOperationCount(); i < count; ++i) {
+    const int operationCount = behavior->GetParameterOperationCount();
+    for (int i = 0; i < operationCount; ++i) {
         CKParameterOperation *operation = behavior->GetParameterOperation(i);
+        if (!operation) continue;
 
-        CK_ID inParam1Id = operation->GetInParameter1()->GetID();
-        if (m_InputParamSet.find(inParam1Id) == m_InputParamSet.end()) {
-            m_InputParams.push_back(inParam1Id);
-            m_InputParamSet.insert(inParam1Id);
+        CKParameterIn *inParam1 = operation->GetInParameter1();
+        if (inParam1) {
+            CK_ID inParam1Id = inParam1->GetID();
+            if (m_InputParamSet.find(inParam1Id) == m_InputParamSet.end()) {
+                m_InputParams.push_back(inParam1Id);
+                m_InputParamSet.insert(inParam1Id);
+            }
         }
 
-        CK_ID inParam2Id = operation->GetInParameter2()->GetID();
-        if (m_InputParamSet.find(inParam2Id) == m_InputParamSet.end()) {
-            m_InputParams.push_back(inParam2Id);
-            m_InputParamSet.insert(inParam2Id);
+        CKParameterIn *inParam2 = operation->GetInParameter2();
+        if (inParam2) {
+            CK_ID inParam2Id = inParam2->GetID();
+            if (m_InputParamSet.find(inParam2Id) == m_InputParamSet.end()) {
+                m_InputParams.push_back(inParam2Id);
+                m_InputParamSet.insert(inParam2Id);
+            }
         }
 
-        CK_ID outParamId = operation->GetOutParameter()->GetID();
-        if (m_OutputParamSet.find(outParamId) == m_OutputParamSet.end()) {
-            m_OutputParams.push_back(outParamId);
-            m_OutputParamSet.insert(outParamId);
+        CKParameterOut *outParam = operation->GetOutParameter();
+        if (outParam) {
+            CK_ID outParamId = outParam->GetID();
+            if (m_OutputParamSet.find(outParamId) == m_OutputParamSet.end()) {
+                m_OutputParams.push_back(outParamId);
+                m_OutputParamSet.insert(outParamId);
+            }
         }
     }
 
     // Process behavior links if this is a behavior graph
     if (behaviorData.isBehaviorGraph) {
         // Add behavior links
-        for (int i = 0, count = behavior->GetSubBehaviorLinkCount(); i < count; ++i) {
+        const int linkCount = behavior->GetSubBehaviorLinkCount();
+        for (int i = 0; i < linkCount; ++i) {
             CKBehaviorLink *behaviorLink = behavior->GetSubBehaviorLink(i);
+            if (!behaviorLink) continue;
 
             // Set start endpoint
             CKBehaviorIO *inputIO = behaviorLink->GetInBehaviorIO();
@@ -162,17 +186,22 @@ void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavio
         }
 
         // Add operations
-        for (int i = 0, count = behavior->GetParameterOperationCount(); i < count; ++i) {
+        for (int i = 0; i < operationCount; ++i) {
             CKParameterOperation *operation = behavior->GetParameterOperation(i);
-            Operation operationData(operation->GetID());
-            behaviorData.AddOperation(operationData);
+            if (operation) {
+                Operation operationData(operation->GetID());
+                behaviorData.AddOperation(operationData);
+            }
         }
 
         // Add local parameters
-        for (int i = 0, count = behavior->GetLocalParameterCount(); i < count; ++i) {
+        const int localParamCount = behavior->GetLocalParameterCount();
+        for (int i = 0; i < localParamCount; ++i) {
             CKParameterLocal *localParam = behavior->GetLocalParameter(i);
-            Parameter paramData(localParam->GetID(), PARAM_STYLE_CLOSED);
-            behaviorData.AddLocalParameter(paramData);
+            if (localParam) {
+                Parameter paramData(localParam->GetID(), PARAM_STYLE_CLOSED);
+                behaviorData.AddLocalParameter(paramData);
+            }
         }
     }
 }
@@ -300,7 +329,7 @@ LinkEndpoint GraphBuilder::GetParameterEndpoint(CKParameter *parameter) {
     return {position.id, position.index, ENDPOINT_POUT}; // Output parameter endpoint
 }
 
-CKBehavior *GraphBuilder::GetParameterOwnerBehavior(CKParameter *parameter) {
+CKBehavior *GraphBuilder::GetParameterOwner(CKParameter *parameter) {
     // Local parameter case
     if (parameter->GetClassID() == CKCID_PARAMETERLOCAL) {
         return (CKBehavior *) parameter->GetOwner();
