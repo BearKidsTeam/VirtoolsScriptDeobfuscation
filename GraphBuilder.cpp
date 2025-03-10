@@ -62,7 +62,7 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorData &GraphBuilder::GetBehavior(CK_ID id) {
+BehaviorData &GraphBuilder::GetBehaviorData(CK_ID id) {
     const int index = m_BehaviorMap[id];
     return index >= 0 ? m_Data.behaviors[index] : m_Data.scriptRoot;
 }
@@ -358,12 +358,12 @@ CKBehavior *GraphBuilder::GetParameterOwner(CKParameter *parameter) {
 
 GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID behaviorId, CK_ID sourceId) {
     // Check if shortcut already exists
-    BehaviorData &behavior = GetBehavior(behaviorId);
+    BehaviorData &behaviorData = GetBehaviorData(behaviorId);
 
     // Check if shortcut already exists
-    const int sharedParamCount = static_cast<int>(behavior.sharedParams.size());
+    const int sharedParamCount = static_cast<int>(behaviorData.sharedParams.size());
     for (int i = 0; i < sharedParamCount; ++i) {
-        if (behavior.sharedParams[i].sourceId == sourceId) {
+        if (behaviorData.sharedParams[i].sourceId == sourceId) {
             return {behaviorId, i, behaviorId};
         }
     }
@@ -371,9 +371,9 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     // Create a new shortcut parameter
     Parameter paramData(sourceId, PARAM_STYLE_CLOSED);
     paramData.sourceId = sourceId;
-    behavior.AddSharedParameter(paramData);
+    behaviorData.AddSharedParameter(paramData);
 
-    return {behaviorId, static_cast<int>(behavior.sharedParams.size()) - 1, behaviorId};
+    return {behaviorId, static_cast<int>(behaviorData.sharedParams.size()) - 1, behaviorId};
 }
 
 void GraphBuilder::ConfigureParameterLinks() {
@@ -410,7 +410,7 @@ void GraphBuilder::ConfigureParameterLinks() {
                 Link link(0, LINK_TYPE_PARAMETER_OP, start, lastEndpoint);
                 lastEndpoint = start;
 
-                GetBehavior(beh->GetID()).AddLink(link);
+                GetBehaviorData(beh->GetID()).AddLink(link);
                 beh = beh->GetParent();
             }
         } catch (const std::exception &e) {
@@ -443,7 +443,7 @@ void GraphBuilder::ConfigureParameterLinks() {
                 Link link(0, LINK_TYPE_PARAMETER_OP, lastEndpoint, end);
                 lastEndpoint = end;
 
-                GetBehavior(beh->GetID()).AddLink(link);
+                GetBehaviorData(beh->GetID()).AddLink(link);
                 beh = beh->GetParent();
             }
         } catch (const std::exception &e) {
@@ -497,7 +497,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inp
                                 inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                             };
                             Link link(0, LINK_TYPE_PARAMETER, start, end);
-                            GetBehavior(inputPos.behaviorId).AddLink(link);
+                            GetBehaviorData(inputPos.behaviorId).AddLink(link);
                             connected = true;
                             break;
                         }
@@ -514,7 +514,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inp
                         position.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                     };
                     Link link = {0, LINK_TYPE_PARAMETER, start, end};
-                    GetBehavior(position.behaviorId).AddLink(link);
+                    GetBehaviorData(position.behaviorId).AddLink(link);
                 }
             } else if (inputParam->GetSharedSource()) {
                 // Shared source connection
@@ -540,7 +540,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inp
                                 inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                             };
                             Link link = {0, LINK_TYPE_PARAMETER, start, end};
-                            GetBehavior(inputPos.behaviorId).AddLink(link);
+                            GetBehaviorData(inputPos.behaviorId).AddLink(link);
                             connected = true;
                             break;
                         }

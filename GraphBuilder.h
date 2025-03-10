@@ -66,7 +66,7 @@ private:
      * @param id Behavior ID
      * @return Reference to the behavior block
      */
-    BehaviorData &GetBehavior(CK_ID id);
+    BehaviorData &GetBehaviorData(CK_ID id);
 
     /**
      * Checks if an ID is an operation
