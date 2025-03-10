@@ -65,18 +65,18 @@ private:
     std::unordered_set<CK_ID> m_MovedOperations;
 
     /**
-     * Gets a behavior by ID from interface data
-     * @param id Behavior ID
-     * @return Reference to the behavior
+     * Gets a behavior data by ID
+     * @param id Behavior ID to find
+     * @return Pointer to behavior or nullptr if not found
      */
-    BehaviorData &GetBehaviorData(CK_ID id) const;
+    BehaviorData *GetBehaviorData(CK_ID id) const;
 
     /**
      * Gets an operation by ID from interface data
      * @param id Operation ID
      * @return Reference to the operation
      */
-    Operation &GetOperation(CK_ID id) const;
+    Operation *GetOperation(CK_ID id) const;
 
     /**
      * Checks if an ID is an operation
@@ -84,6 +84,23 @@ private:
      * @return True if ID is an operation
      */
     bool IsOperation(CK_ID id) const;
+
+    /**
+     * Gets a parameter in a behavior
+     * @param behaviorId ID of behavior containing parameter
+     * @param index Parameter index
+     * @param isLocal Whether this is a local parameter
+     * @return Pointer to parameter or nullptr if not found
+     */
+    Parameter* GetParameter(CK_ID behaviorId, int index, bool isLocal) const;
+
+    /**
+     * Gets a shared parameter in a behavior
+     * @param behaviorId ID of behavior containing parameter
+     * @param index Parameter index
+     * @return Pointer to parameter or nullptr if not found
+     */
+    Parameter* GetSharedParameter(CK_ID behaviorId, int index) const;
 
     /**
      * Gets a vector of all behavior IDs
@@ -110,6 +127,25 @@ private:
      * @param behavior Behavior
      */
     void ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *behavior);
+
+    /**
+     * Sorts behavior links in appropriate order for left-to-right layout
+     * @param behaviorLinks Vector of behavior links to sort
+     */
+    void SortBehaviorLinks(std::vector<Link*>& behaviorLinks);
+
+    /**
+     * Connects all behaviors directly to root when no valid links exist
+     * @param behavior Root behavior
+     */
+    void ConnectDisconnectedBehaviorsToRoot(CKBehavior* behavior);
+
+    /**
+     * Connects behaviors that have no incoming edges
+     * @param behaviorGraph Behavior graph containing all behaviors
+     * @param rootId ID of the root behavior
+     */
+    void ConnectOrphanedBehaviors(BehaviorData &behaviorGraph, CK_ID rootId);
 
     /**
      * Helper for calculating minimum distances in the graph

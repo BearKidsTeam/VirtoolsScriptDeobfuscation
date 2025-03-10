@@ -25,28 +25,28 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
 
     // Calculate layout for each behavior in the order they were inserted
     for (auto &behaviorId : behaviorIds) {
-        BehaviorData &behaviorData = GetBehaviorData(behaviorId);
-        if (behaviorData.isBehaviorGraph) {
+        BehaviorData *behaviorData = GetBehaviorData(behaviorId);
+        if (behaviorData && behaviorData->isBehaviorGraph) {
             CalculateBehaviorPositions(
-                behaviorData,
-                (CKBehavior *) m_Context->GetObject(behaviorData.id),
-                behaviorData.depth == 0
+                *behaviorData,
+                (CKBehavior *) m_Context->GetObject(behaviorData->id),
+                behaviorData->depth == 0
             );
         }
     }
 
     // Calculate visual properties in the same order
     for (auto &behaviorId : behaviorIds) {
-        BehaviorData &behavior = GetBehaviorData(behaviorId);
-        if (behavior.isBehaviorGraph) {
+        BehaviorData *behaviorData = GetBehaviorData(behaviorId);
+        if (behaviorData && behaviorData->isBehaviorGraph) {
             // Apply multiple passes of operation positioning
             for (int i = 0; i < MAX_FIX_STACK_OPS; ++i) {
-                CalculateOperationPositions(behavior);
+                CalculateOperationPositions(*behaviorData);
             }
 
             // Calculate parameter positions
-            CalculateLocalParameterPositions(behavior, false);
-            CalculateLocalParameterPositions(behavior, true);
+            CalculateLocalParameterPositions(*behaviorData, false);
+            CalculateLocalParameterPositions(*behaviorData, true);
         }
     }
 
@@ -61,47 +61,65 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorData &LayoutCalculator::GetBehaviorData(CK_ID id) const {
-    // Check if the ID is the root behavior
+BehaviorData *LayoutCalculator::GetBehaviorData(CK_ID id) const {
     if (m_Data.rootBehavior.id == id) {
-        return m_Data.rootBehavior;
+        return &m_Data.rootBehavior;
     }
 
-    // Search for the behavior in the behaviors
     for (auto &behavior : m_Data.behaviors) {
         if (behavior.id == id) {
-            return behavior;
+            return &behavior;
         }
     }
 
-    // If not found, throw an exception
-    throw std::runtime_error("Behavior not found with ID: " + std::to_string(id));
+    return nullptr;
 }
 
-Operation &LayoutCalculator::GetOperation(CK_ID id) const {
-    // First check script root operations
+Operation *LayoutCalculator::GetOperation(CK_ID id) const {
+    // Check root behavior operations
     for (auto &op : m_Data.rootBehavior.operations) {
         if (op.id == id) {
-            return op;
+            return &op;
         }
     }
 
-    // Check all behaviors
+    // Check all other behaviors
     for (auto &behavior : m_Data.behaviors) {
         for (auto &op : behavior.operations) {
             if (op.id == id) {
-                return op;
+                return &op;
             }
         }
     }
 
-    // If not found, throw an exception
-    throw std::runtime_error("Operation not found with ID: " + std::to_string(id));
+    return nullptr;
 }
 
 bool LayoutCalculator::IsOperation(CK_ID id) const {
     CKObject *obj = m_Context->GetObject(id);
     return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
+}
+
+
+Parameter *LayoutCalculator::GetParameter(CK_ID behaviorId, int index, bool isLocal) const {
+    BehaviorData *behaviorData = GetBehaviorData(behaviorId);
+    if (!behaviorData) return nullptr;
+
+    if (isLocal) {
+        if (index >= 0 && index < behaviorData->localParams.size()) {
+            return &behaviorData->localParams[index];
+        }
+    } else {
+        if (index >= 0 && index < behaviorData->sharedParams.size()) {
+            return &behaviorData->sharedParams[index];
+        }
+    }
+
+    return nullptr;
+}
+
+Parameter *LayoutCalculator::GetSharedParameter(CK_ID behaviorId, int index) const {
+    return GetParameter(behaviorId, index, false);
 }
 
 std::vector<CK_ID> LayoutCalculator::GetBehaviorIds() const {
@@ -148,92 +166,159 @@ void LayoutCalculator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
 }
 
 void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *behavior) {
-    // Clear existing graph data
+    // Initialize graph structures
     m_Vertices.clear();
     m_Edges.clear();
 
-    // Initialize vertex for root behavior
-    m_Vertices[behavior->GetID()] = Vertex();
+    const CK_ID rootId = behavior->GetID();
 
-    // Initialize vertices for sub-behaviors
+    // Create root vertex
+    m_Vertices[rootId] = Vertex();
+
+    // Create vertices for all sub-behaviors
     const int subBehaviorCount = behavior->GetSubBehaviorCount();
     for (int i = 0; i < subBehaviorCount; ++i) {
         CKBehavior *subBehavior = behavior->GetSubBehavior(i);
-        m_Vertices[subBehavior->GetID()] = Vertex();
-    }
-
-    // Collect behavior links
-    std::vector<Link *> behaviorLinks;
-    for (auto &link : behaviorGraph.links) {
-        if (link.IsBehaviorLink()) {
-            behaviorLinks.push_back(&link);
+        if (subBehavior) {
+            m_Vertices[subBehavior->GetID()] = Vertex();
         }
     }
 
-    // Sort behavior links based on input/output positions of connected behaviors
-    std::sort(behaviorLinks.begin(), behaviorLinks.end(),
-              [](const Link *a, const Link *b) {
-                  // Primary sort by output position (link.start)
-                  if (a->start.index != b->start.index) {
-                      return a->start.index > b->start.index;
-                  }
+    // Skip further processing if no sub-behaviors exist
+    if (subBehaviorCount == 0) {
+        return;
+    }
 
-                  // Secondary sort by input position (link.end)
-                  if (a->end.index != b->end.index) {
-                      return a->end.index > b->end.index;
-                  }
+    // Collect and filter valid behavior links
+    std::vector<Link *> behaviorLinks;
+    for (auto &link : behaviorGraph.links) {
+        if (link.IsBehaviorLink()) {
+            // Only include links between known behaviors
+            if (m_Vertices.find(link.start.id) != m_Vertices.end() &&
+                m_Vertices.find(link.end.id) != m_Vertices.end()) {
+                behaviorLinks.push_back(&link);
+            }
+        }
+    }
 
-                  // If both positions match, use IDs for stable sorting
-                  return a->id > b->id;
-              });
+    // Handle the case where no valid links exist
+    if (behaviorLinks.empty()) {
+        ConnectDisconnectedBehaviorsToRoot(behavior);
+        return;
+    }
 
-    // Add edges from behavior links sorted by input/output positions
+    // Sort links in proper order for left-to-right layout
+    SortBehaviorLinks(behaviorLinks);
+
+    // Add edges to graph in sorted order
     for (Link *link : behaviorLinks) {
         AddGraphEdge(link->start.id, link->end.id);
     }
 
+    // Connect any remaining unconnected behaviors
+    ConnectOrphanedBehaviors(behaviorGraph, rootId);
+}
 
-    // Connect unconnected nodes to ensure a connected graph
-    CK_ID sourceId = behavior->GetID();
+void LayoutCalculator::SortBehaviorLinks(std::vector<Link *> &behaviorLinks) {
+    // Sort links by:
+    // 1. Source behavior ID (descending)
+    // 2. Output index (descending)
+    // 3. Target behavior ID (descending)
+    // 4. Input index (descending)
+    std::sort(behaviorLinks.begin(), behaviorLinks.end(),
+              [](const Link *a, const Link *b) {
+                  // Compare source behaviors
+                  if (a->start.id != b->start.id) {
+                      return a->start.id > b->start.id;
+                  }
 
-    // Order behaviors by their inputs positions (typically top-to-bottom)
-    std::vector<std::pair<CK_ID, int>> behaviorsByInputs;
-    for (const auto &vertex : m_Vertices) {
-        CK_ID vertexId = vertex.first;
-        if (vertexId != behavior->GetID()) {
-            // Find the first/top input position of this behavior
-            int minInputPos = INT_MAX;
-            for (auto &link : behaviorGraph.links) {
-                if (link.IsBehaviorLink() && link.end.id == vertexId) {
-                    minInputPos = std::min(minInputPos, link.end.index);
+                  // Compare output indices
+                  if (a->start.index != b->start.index) {
+                      return a->start.index > b->start.index;
+                  }
+
+                  // Compare target behaviors
+                  if (a->end.id != b->end.id) {
+                      return a->end.id > b->end.id;
+                  }
+
+                  // Compare input indices
+                  if (a->end.index != b->end.index) {
+                      return a->end.index > b->end.index;
+                  }
+
+                  // Use link ID for stable sorting
+                  return a->id > b->id;
+              });
+}
+
+void LayoutCalculator::ConnectDisconnectedBehaviorsToRoot(CKBehavior *behavior) {
+    // For an empty graph, connect all behaviors to root in sequential chain
+    CK_ID prevId = behavior->GetID();
+    const int subCount = behavior->GetSubBehaviorCount();
+
+    for (int i = 0; i < subCount; ++i) {
+        CKBehavior *subBehavior = behavior->GetSubBehavior(i);
+        if (subBehavior) {
+            CK_ID currentId = subBehavior->GetID();
+            AddGraphEdge(prevId, currentId);
+            prevId = currentId;
+        }
+    }
+}
+
+void LayoutCalculator::ConnectOrphanedBehaviors(BehaviorData &behaviorGraph, CK_ID rootId) {
+    // Find behaviors without incoming edges and connect them
+
+    // Create a list of orphaned behaviors with their display position
+    struct OrphanedBehavior {
+        CK_ID id;
+        float verticalPosition;
+    };
+
+    std::vector<OrphanedBehavior> orphanedBehaviors;
+
+    for (const auto &vertexPair : m_Vertices) {
+        CK_ID behaviorId = vertexPair.first;
+        const Vertex &vertex = vertexPair.second;
+
+        // Skip root and behaviors with incoming edges
+        if (behaviorId != rootId && vertex.incomingEdgeCount == 0) {
+            float vPos = 0.0f;
+
+            // Find the behavior data to get vertical position
+            BehaviorData *behaviorData = nullptr;
+            if (behaviorId == behaviorGraph.id) {
+                behaviorData = &behaviorGraph;
+            } else {
+                for (auto &behavior : m_Data.behaviors) {
+                    if (behavior.id == behaviorId) {
+                        behaviorData = &behavior;
+                        break;
+                    }
                 }
             }
 
-            // If no links found, use a default based on vertical position
-            if (minInputPos == INT_MAX) {
-                const BehaviorData &behData = GetBehaviorData(vertexId);
-                minInputPos = static_cast<int>(behData.rect.vPos / 20.0f);
+            // Get vertical position if behavior data was found
+            if (behaviorData) {
+                vPos = behaviorData->rect.vPos;
             }
 
-            behaviorsByInputs.emplace_back(vertexId, minInputPos);
+            orphanedBehaviors.push_back({behaviorId, vPos});
         }
     }
 
-    // Sort by input position
-    std::sort(behaviorsByInputs.begin(), behaviorsByInputs.end(),
-              [](const std::pair<CK_ID, int> &a, const std::pair<CK_ID, int> &b) {
-                  return a.second > b.second;
+    // Sort orphaned behaviors by vertical position (descending)
+    std::sort(orphanedBehaviors.begin(), orphanedBehaviors.end(),
+              [](const OrphanedBehavior &a, const OrphanedBehavior &b) {
+                  return a.verticalPosition > b.verticalPosition;
               });
 
-    // Connect unconnected nodes in input position order
-    for (const auto &entry : behaviorsByInputs) {
-        CK_ID vertexId = entry.first;
-        // If node has no incoming edges, create a virtual edge
-        if (m_Vertices[vertexId].incomingEdgeCount == 0) {
-            // Add a virtual edge and make them a chain
-            AddGraphEdge(sourceId, vertexId);
-            sourceId = vertexId;
-        }
+    // Connect orphaned behaviors to form a chain
+    CK_ID sourceId = rootId;
+    for (const auto &orphan : orphanedBehaviors) {
+        AddGraphEdge(sourceId, orphan.id);
+        sourceId = orphan.id;
     }
 }
 
@@ -297,10 +382,12 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool is
          edgeIndex != -1;
          edgeIndex = m_Edges[edgeIndex].nextEdgeIndex) {
         CK_ID targetId = m_Edges[edgeIndex].targetId;
+        BehaviorData *targetData = GetBehaviorData(targetId);
+        if (!targetData) continue;
 
         // Only consider nodes that are direct children in the shortest path tree
         if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() && m_PredecessorEdge[targetId] == edgeIndex) {
-            Rect childSize = CalculateSubgraphSize(GetBehaviorData(targetId), false);
+            Rect childSize = CalculateSubgraphSize(*targetData, false);
             totalVerticalSize += childSize.vSize + 20.0f * 2;
             maxHorizontalSize = std::max(maxHorizontalSize, childSize.hSize);
             childCount++;
@@ -322,7 +409,7 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool is
 }
 
 void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float horizontalPos, float verticalPos,
-                                            bool isRoot) {
+                                             bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
         behaviorData.rect.hPos = horizontalPos;
@@ -338,13 +425,15 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
          edgeIndex != -1;
          edgeIndex = m_Edges[edgeIndex].nextEdgeIndex) {
         CK_ID targetId = m_Edges[edgeIndex].targetId;
+        BehaviorData *targetData = GetBehaviorData(targetId);
+        if (!targetData) continue;
 
         // Only consider nodes that are direct children in the shortest path tree
         if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() &&
             m_PredecessorEdge[targetId] == edgeIndex) {
             const Rect &childSize = m_RequiredSize[targetId];
             PlaceBehaviorInParent(
-                GetBehaviorData(targetId),
+                *targetData,
                 horizontalPos + (isRoot ? 20.0f : behaviorData.rect.hSize + 20.0f * 2),
                 verticalPos + currentVerticalOffset,
                 false
@@ -401,16 +490,20 @@ Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
 
     // Handle operation
     if (IsOperation(targetId)) {
-        Operation &operation = GetOperation(targetId);
-        position.h = roundf(operation.hPos / 20.0f) + inputIndex * 2;
-        position.v = roundf(operation.vPos / 20.0f);
+        Operation *operation = GetOperation(targetId);
+        if (operation) {
+            position.h = roundf(operation->hPos / 20.0f) + inputIndex * 2;
+            position.v = roundf(operation->vPos / 20.0f);
+        }
     } else {
         // Handle behavior
-        BehaviorData &behaviorData = GetBehaviorData(targetId);
-        float horizontalPos = roundf(behaviorData.rect.hPos / 20.0f);
-        float verticalPos = roundf(behaviorData.rect.vPos / 20.0f);
-        position.h = horizontalPos + static_cast<float>(inputIndex);
-        position.v = verticalPos - 1.0f;
+        BehaviorData *behaviorData = GetBehaviorData(targetId);
+        if (behaviorData) {
+            float horizontalPos = roundf(behaviorData->rect.hPos / 20.0f);
+            float verticalPos = roundf(behaviorData->rect.vPos / 20.0f);
+            position.h = horizontalPos + static_cast<float>(inputIndex);
+            position.v = verticalPos - 1.0f;
+        }
     }
 
     return position;
@@ -421,16 +514,20 @@ Point LayoutCalculator::GetOutputParamPosition(CK_ID targetId, int outputIndex) 
 
     // Handle operation
     if (IsOperation(targetId)) {
-        Operation &operation = GetOperation(targetId);
-        position.h = roundf(operation.hPos / 20.0f) + 1;
-        position.v = roundf(operation.vPos / 20.0f) + 2;
+        Operation *operation = GetOperation(targetId);
+        if (operation) {
+            position.h = roundf(operation->hPos / 20.0f) + 1;
+            position.v = roundf(operation->vPos / 20.0f) + 2;
+        }
     } else {
         // Handle behavior
-        BehaviorData &behaviorData = GetBehaviorData(targetId);
-        float horizontalPos = roundf(behaviorData.rect.hPos / 20.0f);
-        float verticalPos = roundf(behaviorData.rect.vPos / 20.0f);
-        position.h = horizontalPos + static_cast<float>(outputIndex);
-        position.v = verticalPos + roundf(behaviorData.rect.vSize / 20.0f) + 1;
+        BehaviorData *behaviorData = GetBehaviorData(targetId);
+        if (behaviorData) {
+            float horizontalPos = roundf(behaviorData->rect.hPos / 20.0f);
+            float verticalPos = roundf(behaviorData->rect.vPos / 20.0f);
+            position.h = horizontalPos + static_cast<float>(outputIndex);
+            position.v = verticalPos + roundf(behaviorData->rect.vSize / 20.0f) + 1;
+        }
     }
 
     return position;
@@ -449,18 +546,21 @@ void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) 
                 continue;
             }
 
-            Operation *startOperation = &GetOperation(paramLink.start.id);
+            Operation *startOperation = GetOperation(paramLink.start.id);
+            if (!startOperation) {
+                continue;
+            }
 
             // Position based on destination
             if (paramLink.end.type == ENDPOINT_PIN) {
                 // Normal input
                 MoveOperationToPosition(*startOperation,
-                                       GetInputParamPosition(paramLink.end.id, paramLink.end.index));
+                                        GetInputParamPosition(paramLink.end.id, paramLink.end.index));
                 m_MovedOperations.insert(paramLink.start.id);
             } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
                 // Target input
                 MoveOperationToPosition(*startOperation,
-                                       GetInputParamPosition(paramLink.end.id, -1));
+                                        GetInputParamPosition(paramLink.end.id, -1));
                 m_MovedOperations.insert(paramLink.start.id);
             }
         }
@@ -507,7 +607,7 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
                 if (paramLink.start.type == ENDPOINT_POUT) {
                     // From output
                     MoveParameterToPosition(*endParam,
-                                           GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
+                                            GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
                 }
             }
         }
@@ -523,7 +623,7 @@ void LayoutCalculator::DecorateStart(BehaviorData &script, float verticalStartPo
 }
 
 void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior,
-                                                   float startHorizontal, float startVertical) {
+                                                    float startHorizontal, float startVertical) {
     // Reset position for root behavior
     if (behaviorData.depth == 0) {
         behaviorData.rect.hPos = 0;
@@ -540,8 +640,11 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
         const int subBehaviorCount = behavior->GetSubBehaviorCount();
         for (int i = 0; i < subBehaviorCount; ++i) {
             CKBehavior *subBeh = behavior->GetSubBehavior(i);
+            if (!subBeh) continue;
+            BehaviorData *subBehData = GetBehaviorData(subBeh->GetID());
+            if (!subBehData) continue;
             RecalculateAbsolutePositions(
-                GetBehaviorData(subBeh->GetID()), subBeh,
+                *subBehData, subBeh,
                 behaviorData.rect.hPos, behaviorData.rect.vPos
             );
         }
@@ -549,9 +652,14 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
         // Process operations
         const int operationCount = behavior->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
-            Operation &operation = GetOperation(behavior->GetParameterOperation(i)->GetID());
-            operation.hPos += behaviorData.rect.hPos;
-            operation.vPos += behaviorData.rect.vPos;
+            CKParameterOperation *operation = behavior->GetParameterOperation(i);
+            if (operation) {
+                Operation *operationData = GetOperation(operation->GetID());
+                if (operationData) {
+                    operationData->hPos += behaviorData.rect.hPos;
+                    operationData->vPos += behaviorData.rect.vPos;
+                }
+            }
         }
     }
 }
