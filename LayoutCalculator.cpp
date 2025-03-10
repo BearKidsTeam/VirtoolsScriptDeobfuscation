@@ -164,7 +164,7 @@ void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *b
     // Add edges from behavior links (in reverse order)
     for (auto it = behaviorGraph.links.rbegin(); it != behaviorGraph.links.rend(); ++it) {
         Link &link = *it;
-        if (link.type == LINK_TYPE_BEHAVIOR) {
+        if (link.IsBehaviorLink()) {
             // Behavior link
             AddGraphEdge(link.start.id, link.end.id);
         }
