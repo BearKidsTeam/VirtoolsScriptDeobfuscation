@@ -745,7 +745,7 @@ public:
 struct BehaviorData : InterfaceElement {
     bool folded = false;          ///< Whether the behavior is collapsed
     CKDWORD depth = 0;            ///< Depth in the behavior hierarchy
-    Rect size;                    ///< Size and position of the behavior
+    Rect rect;                    ///< Size and position of the behavior
     float hExpandSize = 0.0f;     ///< Expanded horizontal size
     float vExpandSize = 0.0f;     ///< Expanded vertical size
     bool isBehaviorGraph = false; ///< Whether this is a behavior graph

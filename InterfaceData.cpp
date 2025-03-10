@@ -599,7 +599,7 @@ std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &positi
     std::vector<InterfaceElement *> elements;
 
     // Check if position is within the behavior itself
-    if (size.Contains(position)) {
+    if (rect.Contains(position)) {
         elements.push_back(this);
     }
 
@@ -644,7 +644,7 @@ std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &positi
 void BehaviorData::Reset() {
     folded = false;
     depth = 0;
-    size = Rect();
+    rect = Rect();
     hExpandSize = 0.0f;
     vExpandSize = 0.0f;
     isBehaviorGraph = false;
@@ -1121,8 +1121,8 @@ CKBOOL InterfaceData::LoadBehaviorHeader(SerializationContext &context, Behavior
     // Read position
     const float x = chunk->ReadFloat();
     const float y = chunk->ReadFloat();
-    behavior.size.hPos = x;
-    behavior.size.vPos = y;
+    behavior.rect.hPos = x;
+    behavior.rect.vPos = y;
 
     if (!context.isNotScript) {
         // Script-specific data
@@ -1155,8 +1155,8 @@ CKBOOL InterfaceData::LoadBehaviorHeader(SerializationContext &context, Behavior
         // Read size
         const float width = chunk->ReadFloat();
         const float height = chunk->ReadFloat();
-        behavior.size.hSize = width;
-        behavior.size.vSize = height;
+        behavior.rect.hSize = width;
+        behavior.rect.vSize = height;
 
         // Read expanded size
         const float expandWidth = chunk->ReadFloat();
@@ -1490,8 +1490,8 @@ CKBOOL InterfaceData::SaveBehaviorHeader(SerializationContext &context) {
     if (!context.isNotScript) {
         // Save script-specific data
         chunk->WriteDword(context.scriptIndex++); // index
-        chunk->WriteFloat(behavior.size.hPos);
-        chunk->WriteFloat(behavior.size.vPos);
+        chunk->WriteFloat(behavior.rect.hPos);
+        chunk->WriteFloat(behavior.rect.vPos);
         chunk->WriteFloat(start.hStartPos);
         chunk->WriteFloat(start.vStartPos);
         chunk->WriteFloat(start.vSize);
@@ -1500,10 +1500,10 @@ CKBOOL InterfaceData::SaveBehaviorHeader(SerializationContext &context) {
     } else {
         // Save behavior-specific data
         chunk->WriteDword(behavior.depth);
-        chunk->WriteFloat(behavior.size.hPos);
-        chunk->WriteFloat(behavior.size.vPos);
-        chunk->WriteFloat(behavior.size.hSize);
-        chunk->WriteFloat(behavior.size.vSize);
+        chunk->WriteFloat(behavior.rect.hPos);
+        chunk->WriteFloat(behavior.rect.vPos);
+        chunk->WriteFloat(behavior.rect.hSize);
+        chunk->WriteFloat(behavior.rect.vSize);
         chunk->WriteFloat(behavior.hExpandSize);
         chunk->WriteFloat(behavior.vExpandSize);
     }

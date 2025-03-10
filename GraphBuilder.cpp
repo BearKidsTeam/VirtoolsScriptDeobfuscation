@@ -227,13 +227,13 @@ void GraphBuilder::CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior 
         }
 
         // Set size
-        behaviorData.size.hSize = static_cast<float>(width) * 20.0f;
-        behaviorData.size.vSize = static_cast<float>(height) * 20.0f;
+        behaviorData.rect.hSize = static_cast<float>(width) * 20.0f;
+        behaviorData.rect.vSize = static_cast<float>(height) * 20.0f;
 
         // Set expanded size for behavior graphs
         if (behaviorData.isBehaviorGraph) {
-            behaviorData.hExpandSize = behaviorData.size.hSize * 10.0f;
-            behaviorData.vExpandSize = behaviorData.size.vSize * 10.0f;
+            behaviorData.hExpandSize = behaviorData.rect.hSize * 10.0f;
+            behaviorData.vExpandSize = behaviorData.rect.vSize * 10.0f;
         }
     }
 }

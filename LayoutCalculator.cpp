@@ -227,7 +227,7 @@ void LayoutCalculator::CalculateGraphDistances(BehaviorData &behaviorGraph) {
 
 Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool isRoot) {
     CK_ID currentId = behaviorData.id;
-    Rect size = behaviorData.size;
+    Rect size = behaviorData.rect;
 
     // Reset size for root node
     if (isRoot) {
@@ -272,8 +272,8 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
                                             bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
-        behaviorData.size.hPos = horizontalPos;
-        behaviorData.size.vPos = verticalPos + (m_RequiredSize[behaviorData.id].vSize - behaviorData.size.vSize) / 2;
+        behaviorData.rect.hPos = horizontalPos;
+        behaviorData.rect.vPos = verticalPos + (m_RequiredSize[behaviorData.id].vSize - behaviorData.rect.vSize) / 2;
     }
 
     // Position all children
@@ -292,7 +292,7 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
             const Rect &childSize = m_RequiredSize[targetId];
             PlaceBehaviorInParent(
                 GetBehavior(targetId),
-                horizontalPos + (isRoot ? 20.0f : behaviorData.size.hSize + 20.0f * 2),
+                horizontalPos + (isRoot ? 20.0f : behaviorData.rect.hSize + 20.0f * 2),
                 verticalPos + currentVerticalOffset,
                 false
             );
@@ -354,8 +354,8 @@ Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
     } else {
         // Handle behavior
         BehaviorData &behavior = GetBehavior(targetId);
-        float horizontalPos = roundf(behavior.size.hPos / 20.0f);
-        float verticalPos = roundf(behavior.size.vPos / 20.0f);
+        float horizontalPos = roundf(behavior.rect.hPos / 20.0f);
+        float verticalPos = roundf(behavior.rect.vPos / 20.0f);
         position.h = horizontalPos + static_cast<float>(inputIndex);
         position.v = verticalPos - 1.0f;
     }
@@ -374,10 +374,10 @@ Point LayoutCalculator::GetOutputParamPosition(CK_ID targetId, int outputIndex) 
     } else {
         // Handle behavior
         BehaviorData &behavior = GetBehavior(targetId);
-        float horizontalPos = roundf(behavior.size.hPos / 20.0f);
-        float verticalPos = roundf(behavior.size.vPos / 20.0f);
+        float horizontalPos = roundf(behavior.rect.hPos / 20.0f);
+        float verticalPos = roundf(behavior.rect.vPos / 20.0f);
         position.h = horizontalPos + static_cast<float>(outputIndex);
-        position.v = verticalPos + roundf(behavior.size.vSize / 20.0f) + 1;
+        position.v = verticalPos + roundf(behavior.rect.vSize / 20.0f) + 1;
     }
 
     return position;
@@ -473,13 +473,13 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
                                                    float startHorizontal, float startVertical) {
     // Reset position for root behavior
     if (behaviorData.depth == 0) {
-        behaviorData.size.hPos = 0;
-        behaviorData.size.vPos = 0;
+        behaviorData.rect.hPos = 0;
+        behaviorData.rect.vPos = 0;
     }
 
     // Apply offset
-    behaviorData.size.hPos += startHorizontal;
-    behaviorData.size.vPos += startVertical;
+    behaviorData.rect.hPos += startHorizontal;
+    behaviorData.rect.vPos += startVertical;
 
     // Process sub-behaviors and operations if this is a behavior graph
     if (behaviorData.isBehaviorGraph) {
@@ -489,7 +489,7 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
             CKBehavior *subBeh = behavior->GetSubBehavior(i);
             RecalculateAbsolutePositions(
                 GetBehavior(subBeh->GetID()), subBeh,
-                behaviorData.size.hPos, behaviorData.size.vPos
+                behaviorData.rect.hPos, behaviorData.rect.vPos
             );
         }
 
@@ -497,8 +497,8 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
         const int operationCount = behavior->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
             Operation &operation = GetOperation(behavior->GetParameterOperation(i)->GetID());
-            operation.hPos += behaviorData.size.hPos;
-            operation.vPos += behaviorData.size.vPos;
+            operation.hPos += behaviorData.rect.hPos;
+            operation.vPos += behaviorData.rect.vPos;
         }
     }
 }
