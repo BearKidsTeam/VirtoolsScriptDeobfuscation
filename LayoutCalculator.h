@@ -58,13 +58,9 @@ private:
 
     // Graph state for layout calculation
     std::unordered_map<CK_ID, Vertex> m_Vertices;
-    std::vector<CK_ID> m_VertexIds;
     std::unordered_map<CK_ID, int> m_DistanceFromRoot;
-    std::vector<CK_ID> m_DistanceIds;
     std::unordered_map<CK_ID, Rect> m_RequiredSize;
-    std::vector<CK_ID> m_SizeIds;
     std::unordered_map<CK_ID, int> m_PredecessorEdge;
-    std::vector<CK_ID> m_PredecessorIds;
     std::vector<Edge> m_Edges;
     std::unordered_set<CK_ID> m_MovedOperations;
 
@@ -173,7 +169,7 @@ private:
      * @param inputIndex Input position
      * @return Point
      */
-    Point GetInterfaceInputPosition(CK_ID targetId, int inputIndex);
+    Point GetInputParamPosition(CK_ID targetId, int inputIndex);
 
     /**
      * Gets the output position for an interface
@@ -181,7 +177,7 @@ private:
      * @param outputIndex Output position
      * @return Point
      */
-    Point GetInterfaceOutputPosition(CK_ID targetId, int outputIndex);
+    Point GetOutputParamPosition(CK_ID targetId, int outputIndex);
 
     /**
      * Calculates positions for operations
