@@ -356,7 +356,7 @@ void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point
 }
 
 Point LayoutCalculator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex) {
-    Point position = {};
+    Point position;
 
     // Handle operation
     if (IsOperation(targetId)) {
@@ -376,7 +376,7 @@ Point LayoutCalculator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex
 }
 
 Point LayoutCalculator::GetInterfaceOutputPosition(CK_ID targetId, int outputIndex) {
-    Point position = {};
+    Point position;
 
     // Handle operation
     if (IsOperation(targetId)) {
