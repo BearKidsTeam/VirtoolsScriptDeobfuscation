@@ -69,7 +69,7 @@ private:
      * @param id Behavior ID
      * @return Reference to the behavior
      */
-    BehaviorData &GetBehavior(CK_ID id) const;
+    BehaviorData &GetBehaviorData(CK_ID id) const;
 
     /**
      * Gets an operation by ID from interface data
