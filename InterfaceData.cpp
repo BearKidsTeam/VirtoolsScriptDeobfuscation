@@ -523,27 +523,22 @@ void ExtraData::AddSubData(const ExtraSubData &data) {
 // Behavior implementations
 void BehaviorData::AddLink(const Link &link) {
     links.push_back(link);
-    linkCount = static_cast<int>(links.size());
 }
 
 void BehaviorData::AddOperation(const Operation &op) {
     operations.push_back(op);
-    operationCount = static_cast<int>(operations.size());
 }
 
 void BehaviorData::AddLocalParameter(const Parameter &param) {
     localParams.push_back(param);
-    localParamCount = static_cast<int>(localParams.size());
 }
 
 void BehaviorData::AddSharedParameter(const Parameter &param) {
     sharedParams.push_back(param);
-    sharedParamCount = static_cast<int>(sharedParams.size());
 }
 
 void BehaviorData::AddComment(const Comment &comment) {
     comments.push_back(comment);
-    commentCount = static_cast<int>(comments.size());
 }
 
 Link *BehaviorData::FindLink(CK_ID linkId) {
@@ -649,19 +644,12 @@ void BehaviorData::Reset() {
     vExpandSize = 0.0f;
     isBehaviorGraph = false;
     links.clear();
-    linkCount = 0;
     operations.clear();
-    operationCount = 0;
     comments.clear();
-    commentCount = 0;
     localParams.clear();
-    localParamCount = 0;
     sharedParams.clear();
-    sharedParamCount = 0;
-    inputCount = 0;
     inwardInputs.clear();
     outwardInputs.clear();
-    outputCount = 0;
     inwardOutputs.clear();
     outwardOutputs.clear();
 }
@@ -703,7 +691,6 @@ bool BehaviorData::RemoveElement(InterfaceElement *element) {
                                [link](const Link &l) { return l.id == link->id; });
         if (it != links.end()) {
             links.erase(it);
-            linkCount = static_cast<int>(links.size());
             return true;
         }
     } else if (Operation *op = dynamic_cast<Operation *>(element)) {
@@ -711,7 +698,6 @@ bool BehaviorData::RemoveElement(InterfaceElement *element) {
                                [op](const Operation &o) { return o.id == op->id; });
         if (it != operations.end()) {
             operations.erase(it);
-            operationCount = static_cast<int>(operations.size());
             return true;
         }
     } else if (Comment *comment = dynamic_cast<Comment *>(element)) {
@@ -719,7 +705,6 @@ bool BehaviorData::RemoveElement(InterfaceElement *element) {
                                [comment](const Comment &c) { return c.id == comment->id; });
         if (it != comments.end()) {
             comments.erase(it);
-            commentCount = static_cast<int>(comments.size());
             return true;
         }
     } else if (Parameter *param = dynamic_cast<Parameter *>(element)) {
@@ -728,7 +713,6 @@ bool BehaviorData::RemoveElement(InterfaceElement *element) {
                                [param](const Parameter &p) { return p.id == param->id; });
         if (it != localParams.end()) {
             localParams.erase(it);
-            localParamCount = static_cast<int>(localParams.size());
             return true;
         }
 
@@ -737,7 +721,6 @@ bool BehaviorData::RemoveElement(InterfaceElement *element) {
                           [param](const Parameter &p) { return p.id == param->id; });
         if (it != sharedParams.end()) {
             sharedParams.erase(it);
-            sharedParamCount = static_cast<int>(sharedParams.size());
             return true;
         }
     }
@@ -1175,7 +1158,6 @@ void InterfaceData::LoadBehaviorLinks(SerializationContext &context, BehaviorDat
     const int linkCount = chunk->ReadInt();
     behavior.links.clear();
     behavior.links.reserve(linkCount);
-    behavior.linkCount = linkCount;
 
     // Read each link
     for (int i = 0; i < linkCount; ++i) {
@@ -1217,7 +1199,6 @@ void InterfaceData::LoadBehaviorOperations(SerializationContext &context, Behavi
     const int opCount = chunk->ReadInt();
     behavior.operations.clear();
     behavior.operations.reserve(opCount);
-    behavior.operationCount = opCount;
 
     // Read each operation
     for (int i = 0; i < opCount; ++i) {
@@ -1240,7 +1221,6 @@ void InterfaceData::LoadBehaviorComments(SerializationContext &context, Behavior
     const int commentCount = chunk->ReadInt();
     behavior.comments.clear();
     behavior.comments.reserve(commentCount);
-    behavior.commentCount = commentCount;
 
     // Read each comment
     for (int i = 0; i < commentCount; ++i) {
@@ -1280,7 +1260,6 @@ void InterfaceData::LoadBehaviorParameters(SerializationContext &context, Behavi
     const int localParamCount = chunk->ReadInt();
     behavior.localParams.clear();
     behavior.localParams.reserve(localParamCount);
-    behavior.localParamCount = localParamCount;
 
     // Read local parameter positions
     for (int i = 0; i < localParamCount; ++i) {
@@ -1299,7 +1278,6 @@ void InterfaceData::LoadBehaviorParameters(SerializationContext &context, Behavi
     const int paramShortcutCount = chunk->ReadInt();
     behavior.sharedParams.clear();
     behavior.sharedParams.reserve(paramShortcutCount);
-    behavior.sharedParamCount = paramShortcutCount;
 
     // Read shared parameter positions
     for (int i = 0; i < paramShortcutCount; ++i) {
@@ -1377,10 +1355,6 @@ void InterfaceData::LoadBehaviorGraph(SerializationContext &context, BehaviorDat
         behavior.outwardOutputs.push_back(outputValue);
         chunk->ReadInt(); // Skip extra value
     }
-
-    // Update input and output counts
-    behavior.inputCount = inwardInputCount + outwardInputCount;
-    behavior.outputCount = inwardOutputCount + outwardOutputCount;
 }
 
 void InterfaceData::LoadExtraData(SerializationContext &context) {

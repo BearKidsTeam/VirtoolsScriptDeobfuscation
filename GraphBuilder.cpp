@@ -361,7 +361,8 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     BehaviorData &behavior = GetBehavior(behaviorId);
 
     // Check if shortcut already exists
-    for (int i = 0; i < behavior.sharedParamCount; ++i) {
+    const int sharedParamCount = static_cast<int>(behavior.sharedParams.size());
+    for (int i = 0; i < sharedParamCount; ++i) {
         if (behavior.sharedParams[i].sourceId == sourceId) {
             return {behaviorId, i, behaviorId};
         }
@@ -372,7 +373,7 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     paramData.sourceId = sourceId;
     behavior.AddSharedParameter(paramData);
 
-    return {behaviorId, behavior.sharedParamCount - 1, behaviorId};
+    return {behaviorId, static_cast<int>(behavior.sharedParams.size()) - 1, behaviorId};
 }
 
 void GraphBuilder::ConfigureParameterLinks() {

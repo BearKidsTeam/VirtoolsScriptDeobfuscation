@@ -751,30 +751,23 @@ struct BehaviorData : InterfaceElement {
     bool isBehaviorGraph = false; ///< Whether this is a behavior graph
 
     // Links
-    int linkCount = 0;       ///< Number of links
     std::vector<Link> links; ///< Links within this behavior
 
     // Operations
-    int operationCount = 0;            ///< Number of operations
     std::vector<Operation> operations; ///< Operations within this behavior
 
     // Comments
-    int commentCount = 0;          ///< Number of comments
     std::vector<Comment> comments; ///< Comments within this behavior
 
     // Parameters
-    int localParamCount = 0;            ///< Number of local parameters
     std::vector<Parameter> localParams; ///< Local parameters
 
-    int sharedParamCount = 0;            ///< Number of shared parameters
     std::vector<Parameter> sharedParams; ///< Shared parameters
 
     // Input/Output indices for graph behaviors
-    int inputCount = 0;             ///< Number of inputs
     std::vector<int> inwardInputs;  ///< Inward-facing inputs
     std::vector<int> outwardInputs; ///< Outward-facing inputs
 
-    int outputCount = 0;             ///< Number of outputs
     std::vector<int> inwardOutputs;  ///< Inward-facing outputs
     std::vector<int> outwardOutputs; ///< Outward-facing outputs
 
