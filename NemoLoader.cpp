@@ -204,9 +204,9 @@ CKERROR NemoLoader::CreateInterfaceChunks(CKContext *context, CKObjectArray *lis
                 if (!beh->GetInterfaceChunk()) {
                     err = CreateInterfaceChunk(beh);
                     if (err == CK_OK) {
-                        context->OutputToConsoleEx("Generated interface chunk for <%s>", beh->GetName());
+                        context->OutputToConsoleEx((CKSTRING) "Generated interface chunk for <%s>", beh->GetName());
                     } else {
-                        context->OutputToConsoleEx("Error generating interface chunk for <%s>", beh->GetName());
+                        context->OutputToConsoleEx((CKSTRING) "Error generating interface chunk for <%s>", beh->GetName());
                     }
                 }
             }
