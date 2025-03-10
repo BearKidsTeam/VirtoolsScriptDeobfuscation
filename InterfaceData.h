@@ -1064,6 +1064,12 @@ public:
     //------------------------------------------------------
 
     /**
+     * @brief Creates a new behavior in the interface
+     * @return Reference to the new behavior
+     */
+    BehaviorData &NewBehavior();
+
+    /**
      * @brief Adds a behavior to the interface
      */
     void AddBehavior(BehaviorData &behavior);

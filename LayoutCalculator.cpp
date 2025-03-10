@@ -7,8 +7,8 @@
 #undef min
 #undef max
 
-LayoutCalculator::LayoutCalculator(InterfaceData &target_data, CKContext *context)
-    : m_Data(target_data), m_Context(context) {}
+LayoutCalculator::LayoutCalculator(InterfaceData &targetData, CKContext *context)
+    : m_Data(targetData), m_Context(context) {}
 
 void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     // Get ordered behavior IDs
@@ -125,6 +125,7 @@ std::vector<CK_ID> LayoutCalculator::GetOperationIds() const {
     std::vector<CK_ID> operationIds;
 
     // Add script root operations
+    operationIds.reserve(m_Data.scriptRoot.operations.size());
     for (const auto &op : m_Data.scriptRoot.operations) {
         operationIds.push_back(op.id);
     }
@@ -473,10 +474,11 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
 }
 
 void LayoutCalculator::DecorateStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
-    m_Data.start.id = script.id;
-    m_Data.start.vSize = verticalSize;
-    m_Data.start.vStartPos = verticalStartPos;
-    m_Data.start.vStart = 0;
+    auto &start = m_Data.start;
+    start.id = script.id;
+    start.vSize = verticalSize;
+    start.vStartPos = verticalStartPos;
+    start.vStart = 0;
 }
 
 void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior,

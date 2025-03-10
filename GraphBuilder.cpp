@@ -8,8 +8,8 @@
 #undef min
 #undef max
 
-GraphBuilder::GraphBuilder(InterfaceData &target_data, CKContext *context)
-    : m_Data(target_data), m_Context(context) {}
+GraphBuilder::GraphBuilder(InterfaceData &targetData, CKContext *context)
+    : m_Data(targetData), m_Context(context) {}
 
 void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     // Initialize data structures
@@ -35,19 +35,12 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
         behaviorQueue.pop();
 
         // Create a new behavior data if not the root
-        BehaviorData *currentBehaviorData = nullptr;
-        if (depth == 0) {
-            currentBehaviorData = &m_Data.scriptRoot;
-        } else {
-            m_Data.behaviors.emplace_back();
-            currentBehaviorData = &m_Data.behaviors.back();
-            m_Data.behaviorCount++;
-        }
+        BehaviorData *currentBehaviorData = depth > 0 ? &m_Data.NewBehavior() : &m_Data.scriptRoot;
 
         // Store behavior ID and mapping
         CK_ID behaviorId = currentBehavior->GetID();
         m_BehaviorIds.push_back(behaviorId);
-        m_BehaviorMap[behaviorId] = depth > 0 ? m_Data.behaviors.size() - 1 : -1;
+        m_BehaviorMap[behaviorId] = depth > 0 ? static_cast<int>(m_Data.behaviors.size()) - 1 : -1;
 
         // Map operation IDs to indices
         const int operationCount = currentBehavior->GetParameterOperationCount();

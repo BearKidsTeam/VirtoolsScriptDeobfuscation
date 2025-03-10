@@ -18,10 +18,10 @@ class LayoutCalculator {
 public:
     /**
      * Constructor
-     * @param target_data Reference to the interface data to populate
+     * @param targetData Reference to the interface data to populate
      * @param context Pointer to the CK context
      */
-    LayoutCalculator(InterfaceData &target_data, CKContext *context);
+    LayoutCalculator(InterfaceData &targetData, CKContext *context);
 
     /**
      * Calculates the layout for the entire behavior tree

@@ -809,6 +809,15 @@ InterfaceData::~InterfaceData() {
     Clear();
 }
 
+BehaviorData &InterfaceData::NewBehavior() {
+    behaviors.emplace_back(0);
+    behaviorCount = static_cast<int>(behaviors.size());
+
+    auto &behavior = behaviors.back();
+    NotifyObservers(&behavior, ElementAction::Added);
+    return behavior;
+}
+
 void InterfaceData::AddBehavior(BehaviorData &behavior) {
     behaviors.push_back(behavior);
     behaviorCount = static_cast<int>(behaviors.size());
@@ -1569,7 +1578,7 @@ void InterfaceData::SaveBehaviorLinks(SerializationContext &context) {
     // Write link count and data
     chunk->WriteInt(behavior.links.size());
     for (const auto &link : behavior.links) {
-        chunk->WriteInt(static_cast<int>(link.type));
+        chunk->WriteInt(link.type);
         chunk->WriteObjectID(link.id);
         chunk->WriteObjectID(link.start.id);
         chunk->WriteInt(link.start.index);

@@ -22,10 +22,10 @@ class GraphBuilder {
 public:
     /**
      * Constructor
-     * @param target_data Reference to the interface data to populate
+     * @param targetData Reference to the interface data to populate
      * @param context Pointer to the CK context
      */
-    GraphBuilder(InterfaceData &target_data, CKContext *context);
+    GraphBuilder(InterfaceData &targetData, CKContext *context);
 
     /**
      * Builds the graph representation of a behavior tree
