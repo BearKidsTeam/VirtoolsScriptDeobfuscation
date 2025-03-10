@@ -1,65 +1,10 @@
 #include "InterfaceData.h"
 
+#include <cmath>
 #include <map>
 #include <set>
 #include <queue>
 #include <algorithm>
-
-// InterfaceElement implementations
-template <typename T>
-void InterfaceElement::SetMetadata(const std::string &key, const T &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <>
-void InterfaceElement::SetMetadata<int>(const std::string &key, const int &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <>
-void InterfaceElement::SetMetadata<float>(const std::string &key, const float &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <>
-void InterfaceElement::SetMetadata<std::string>(const std::string &key, const std::string &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <>
-void InterfaceElement::SetMetadata<bool>(const std::string &key, const bool &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <>
-void InterfaceElement::SetMetadata<void *>(const std::string &key, void *const &value) {
-    metadata[key] = MetadataValue(value);
-}
-
-template <typename T>
-bool InterfaceElement::GetMetadata(const std::string &key, T &value) const {
-    auto it = metadata.find(key);
-    if (it != metadata.end()) {
-        const T *pVal = it->second.get<T>();
-        if (pVal) {
-            value = *pVal;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool InterfaceElement::HasMetadata(const std::string &key) const {
-    return metadata.find(key) != metadata.end();
-}
-
-bool InterfaceElement::RemoveMetadata(const std::string &key) {
-    return metadata.erase(key) > 0;
-}
-
-void InterfaceElement::ClearMetadata() {
-    metadata.clear();
-}
 
 // Point implementations
 float Point::DistanceTo(const Point &other) const {
@@ -715,8 +660,6 @@ void BehaviorData::Reset() {
     outputCount = 0;
     inwardOutputs.clear();
     outwardOutputs.clear();
-
-    ClearMetadata();
 }
 
 std::vector<InterfaceElement *> BehaviorData::GetAllElements() {
@@ -860,7 +803,6 @@ void InterfaceData::Clear() {
     behaviorCount = 0;
     extraDataVersion = 0;
     extraData.clear();
-    userData.clear();
 }
 
 void InterfaceData::AddObserver(ElementObserver *observer) {

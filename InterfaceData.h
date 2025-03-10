@@ -1,15 +1,11 @@
 #pragma once
 
-#include <cmath>
 #include <utility>
 #include <vector>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <functional>
 
 #include "CKDefines.h"
-#include "CKContext.h"
 #include "CKBehavior.h"
 #include "CKStateChunk.h"
 
@@ -90,179 +86,18 @@ struct ExtraSubData;
 struct ExtraData;
 struct BehaviorData;
 
-// A simple replacement for std::any for C++11 compatibility
-class MetadataValue {
-public:
-    enum class Type {
-        Empty,
-        Int,
-        Float,
-        String,
-        Bool,
-        Pointer
-    };
-
-    MetadataValue() : type(Type::Empty) {}
-
-    explicit MetadataValue(int value) : type(Type::Int), intValue(value) {}
-
-    explicit MetadataValue(float value) : type(Type::Float), floatValue(value) {}
-
-    explicit MetadataValue(const std::string &value) : type(Type::String), strValue(new std::string(value)) {}
-
-    explicit MetadataValue(bool value) : type(Type::Bool), boolValue(value) {}
-
-    explicit MetadataValue(void *value) : type(Type::Pointer), pointerValue(value) {}
-
-    MetadataValue(const MetadataValue &other) : type(other.type) {
-        switch (type) {
-        case Type::Int: intValue = other.intValue;
-            break;
-        case Type::Float: floatValue = other.floatValue;
-            break;
-        case Type::String: strValue = other.strValue ? new std::string(*other.strValue) : nullptr;
-            break;
-        case Type::Bool: boolValue = other.boolValue;
-            break;
-        case Type::Pointer: pointerValue = other.pointerValue;
-            break;
-        default: break;
-        }
-    }
-
-    MetadataValue &operator=(const MetadataValue &other) {
-        if (this != &other) {
-            clear();
-            type = other.type;
-            switch (type) {
-            case Type::Int: intValue = other.intValue;
-                break;
-            case Type::Float: floatValue = other.floatValue;
-                break;
-            case Type::String: strValue = other.strValue ? new std::string(*other.strValue) : nullptr;
-                break;
-            case Type::Bool: boolValue = other.boolValue;
-                break;
-            case Type::Pointer: pointerValue = other.pointerValue;
-                break;
-            default: break;
-            }
-        }
-        return *this;
-    }
-
-    ~MetadataValue() {
-        clear();
-    }
-
-    void clear() {
-        if (type == Type::String && strValue) {
-            delete strValue;
-            strValue = nullptr;
-        }
-        type = Type::Empty;
-    }
-
-    Type getType() const { return type; }
-    bool isEmpty() const { return type == Type::Empty; }
-
-    template <typename T>
-    T *get() {
-        return const_cast<T *>(static_cast<const MetadataValue *>(this)->get<T>());
-    }
-
-    template <typename T>
-    const T *get() const {
-        return nullptr; // Base template returns nullptr
-    }
-
-private:
-    Type type;
-
-    union {
-        int intValue;
-        float floatValue;
-        std::string *strValue;
-        bool boolValue;
-        void *pointerValue;
-    };
-};
-
-// Template specializations for get()
-template <>
-inline const int *MetadataValue::get<int>() const {
-    return type == Type::Int ? &intValue : nullptr;
-}
-
-template <>
-inline const float *MetadataValue::get<float>() const {
-    return type == Type::Float ? &floatValue : nullptr;
-}
-
-template <>
-inline const std::string *MetadataValue::get<std::string>() const {
-    return type == Type::String ? strValue : nullptr;
-}
-
-template <>
-inline const bool *MetadataValue::get<bool>() const {
-    return type == Type::Bool ? &boolValue : nullptr;
-}
-
-template <>
-inline const void *MetadataValue::get<void>() const {
-    return type == Type::Pointer ? pointerValue : nullptr;
-}
-
 /**
  * @struct InterfaceElement
  * @brief Base class for all interface elements with common functionality
  */
 struct InterfaceElement {
-    CK_ID id = 0;                                            ///< ID of the element
-    std::unordered_map<std::string, MetadataValue> metadata; ///< Custom metadata for extensions
+    CK_ID id = 0; ///< ID of the element
 
     InterfaceElement() = default;
 
     explicit InterfaceElement(CK_ID elementId) : id(elementId) {}
 
     virtual ~InterfaceElement() = default;
-
-    /**
-     * @brief Sets custom metadata for the element
-     * @param key The metadata key
-     * @param value The metadata value
-     */
-    template <typename T>
-    void SetMetadata(const std::string &key, const T &value);
-
-    /**
-     * @brief Gets custom metadata for the element
-     * @param key The metadata key
-     * @param value Reference to store the value if found
-     * @return true if found and value was set, false otherwise
-     */
-    template <typename T>
-    bool GetMetadata(const std::string &key, T &value) const;
-
-    /**
-     * @brief Checks if metadata with the given key exists
-     * @param key The metadata key
-     * @return true if metadata exists, false otherwise
-     */
-    bool HasMetadata(const std::string &key) const;
-
-    /**
-     * @brief Removes metadata with the given key
-     * @param key The metadata key
-     * @return true if metadata was removed, false if it didn't exist
-     */
-    bool RemoveMetadata(const std::string &key);
-
-    /**
-     * @brief Clears all metadata
-     */
-    void ClearMetadata();
 };
 
 /**
@@ -1049,19 +884,18 @@ public:
     //------------------------------------------------------
     // Core data
     //------------------------------------------------------
-    CKDWORD version = 0x16;          ///< Interface chunk version
-    StartPoint start;                ///< Start point of the script
+    CKDWORD version = 0x16;              ///< Interface chunk version
+    StartPoint start;                    ///< Start point of the script
     BehaviorData scriptRoot;             ///< Root behavior
     std::vector<BehaviorData> behaviors; ///< Behavior in the tree
-    int behaviorCount = 0;           ///< Number of behaviors
+    int behaviorCount = 0;               ///< Number of behaviors
 
     // Extra data section
-    int extraDataVersion = 0;         ///< Version of extra data
-    std::vector<ExtraData> extraData; ///< Extra data entries
+    int extraDataVersion = 0;            ///< Version of extra data
+    std::vector<ExtraData> extraData;    ///< Extra data entries
 
     // Extension data
-    std::unordered_map<std::string, MetadataValue> userData; ///< User-defined data
-    std::vector<ElementObserver *> observers;                ///< Observers for change tracking
+    std::vector<ElementObserver *> observers;  ///< Observers for change tracking
 
     //------------------------------------------------------
     // Basic Operations
