@@ -41,7 +41,7 @@ private:
     CKContext *m_Context;
 
     // Maps to track object relationships (for fast lookup)
-    std::unordered_map<CK_ID, int> m_BehaviorMap;                  // Maps behavior ID to index in behaviorBlocks array
+    std::unordered_map<CK_ID, int> m_BehaviorMap;                  // Maps behavior ID to index in behaviors array
     std::unordered_map<CK_ID, std::pair<int, int>> m_OperationMap; // Maps operation ID to <block index, op index>
 
     // Sets to track parameters (for fast lookup)
@@ -59,7 +59,7 @@ private:
      * @param id Behavior ID
      * @return Reference to the behavior block
      */
-    BehaviorBlock &GetBehaviorBlock(CK_ID id);
+    BehaviorData &GetBehavior(CK_ID id);
 
     /**
      * Gets an operation by ID
@@ -86,18 +86,18 @@ private:
 
     /**
      * Decorates a single behavior
-     * @param behaviorBlock Behavior building block
+     * @param behaviorData Behavior data
      * @param behavior CK behavior
      * @param depth Depth in the tree
      */
-    void DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth);
+    void DecorateBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth);
 
     /**
      * Calculates the size of a behavior
-     * @param behaviorBlock Behavior
+     * @param behaviorData Behavior data
      * @param behavior CK behavior
      */
-    void CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior);
+    void CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior *behavior);
 
     /**
      * Gets the position information for an input parameter

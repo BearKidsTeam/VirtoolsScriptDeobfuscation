@@ -69,11 +69,11 @@ private:
     std::unordered_set<CK_ID> m_MovedOperations;
 
     /**
-     * Gets a behavior block by ID from interface data
+     * Gets a behavior by ID from interface data
      * @param id Behavior ID
-     * @return Reference to the behavior block
+     * @return Reference to the behavior
      */
-    BehaviorBlock &GetBehaviorBlock(CK_ID id);
+    BehaviorData &GetBehavior(CK_ID id);
 
     /**
      * Gets an operation by ID from interface data
@@ -113,7 +113,7 @@ private:
      * @param behaviorGraph Behavior graph
      * @param behavior Behavior
      */
-    void ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior);
+    void ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *behavior);
 
     /**
      * Helper for calculating minimum distances in the graph
@@ -125,7 +125,7 @@ private:
      * Calculates minimum distances from the root
      * @param behaviorGraph Behavior graph
      */
-    void CalculateGraphDistances(BehaviorBlock &behaviorGraph);
+    void CalculateGraphDistances(BehaviorData &behaviorGraph);
 
     /**
      * Calculates the size of a subgraph
@@ -133,7 +133,7 @@ private:
      * @param isRoot Whether this is the root node
      * @return Size Rect
      */
-    Rect CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot);
+    Rect CalculateSubgraphSize(BehaviorData &behaviorBlock, bool isRoot);
 
     /**
      * Places a behavior within its parent
@@ -142,7 +142,7 @@ private:
      * @param verticalPos Vertical position
      * @param isRoot Whether this is the root node
      */
-    void PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot);
+    void PlaceBehaviorInParent(BehaviorData &behaviorBlock, float horizontalPos, float verticalPos, bool isRoot);
 
     /**
      * Calculates positions for behaviors in the graph
@@ -151,7 +151,7 @@ private:
      * @param isScript Whether the behavior is a script
      * @return Vertical center position
      */
-    float CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript);
+    float CalculateBehaviorPositions(BehaviorData &behaviorGraph, CKBehavior *behavior, bool isScript);
 
     /**
      * Moves a parameter to a position
@@ -186,17 +186,15 @@ private:
     /**
      * Calculates positions for operations
      * @param behaviorGraph Behavior graph
-     * @param behavior Behavior
      */
-    void CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior);
+    void CalculateOperationPositions(BehaviorData &behaviorGraph);
 
     /**
      * Calculates positions for local parameters
      * @param behaviorGraph Behavior graph
-     * @param behavior Behavior
      * @param isInputDirection Direction (true for inputs, false for outputs)
      */
-    void CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isInputDirection);
+    void CalculateLocalParameterPositions(BehaviorData &behaviorGraph, bool isInputDirection);
 
     /**
      * Sets start information for the behavior script
@@ -204,15 +202,14 @@ private:
      * @param verticalStartPos Vertical start position
      * @param verticalSize Vertical size
      */
-    void DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize);
+    void DecorateStart(BehaviorData &script, float verticalStartPos, float verticalSize);
 
     /**
      * Recalculates absolute positions for behaviors
-     * @param behaviorBlock Behavior
+     * @param behaviorData Behavior data
      * @param behavior CK behavior
      * @param startHorizontal Starting horizontal position
      * @param startVertical Starting vertical position
      */
-    void RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
-                                      float startHorizontal, float startVertical);
+    void RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior, float startHorizontal, float startVertical);
 };

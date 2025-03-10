@@ -1,5 +1,6 @@
 #include "InterfaceData.h"
 
+#include <map>
 #include <set>
 #include <queue>
 #include <algorithm>
@@ -272,17 +273,6 @@ void Rect::Offset(float horizontal, float vertical) {
     vPos += vertical;
 }
 
-void Rect::Scale(float factor) {
-    float centerX = CenterX();
-    float centerY = CenterY();
-
-    hSize *= factor;
-    vSize *= factor;
-
-    hPos = centerX - hSize / 2.0f;
-    vPos = centerY - vSize / 2.0f;
-}
-
 // StartPoint implementations
 Point StartPoint::GetPosition() const {
     return {hStartPos, vStartPos};
@@ -364,48 +354,6 @@ bool Link::IsParameterLink() const {
 
 bool Link::IsParameterOpLink() const {
     return type == LINK_TYPE_PARAMETER_OP;
-}
-
-void Link::OptimizePath() {
-    if (points.size() <= 2) return;
-
-    // Simple implementation - remove points that are in a straight line
-    std::vector<Point> optimized;
-    optimized.push_back(points.front());
-
-    for (size_t i = 1; i < points.size() - 1; ++i) {
-        const Point &prev = optimized.back();
-        const Point &curr = points[i];
-        const Point &next = points[i + 1];
-
-        // If points are not collinear, keep the current point
-        if (std::abs((curr.v - prev.v) * (next.h - curr.h) -
-            (curr.h - prev.h) * (next.v - curr.v)) > 0.001f) {
-            optimized.push_back(curr);
-        }
-    }
-
-    optimized.push_back(points.back());
-    points = std::move(optimized);
-    pointCount = static_cast<int>(points.size());
-}
-
-Rect Link::GetBoundingRect() const {
-    if (points.empty()) return {};
-
-    float minX = points[0].h;
-    float minY = points[0].v;
-    float maxX = points[0].h;
-    float maxY = points[0].v;
-
-    for (const auto &point : points) {
-        minX = std::min(minX, point.h);
-        minY = std::min(minY, point.v);
-        maxX = std::max(maxX, point.h);
-        maxY = std::max(maxY, point.v);
-    }
-
-    return {minX, minY, maxX - minX, maxY - minY};
 }
 
 void Link::Offset(float h, float v) {
@@ -494,37 +442,6 @@ bool Link::PassesNear(const Point &point, float maxDistance) const {
     }
 
     return false;
-}
-
-void Link::CreateSmoothPath(int segmentCount) {
-    if (points.size() < 2 || segmentCount <= 0) return;
-
-    std::vector<Point> newPoints;
-
-    // Keep the first point
-    newPoints.push_back(points.front());
-
-    // Generate smoothed intermediate points
-    for (size_t i = 0; i < points.size() - 1; ++i) {
-        const Point &p1 = points[i];
-        const Point &p2 = points[i + 1];
-
-        for (int j = 1; j <= segmentCount; ++j) {
-            float t = static_cast<float>(j) / static_cast<float>(segmentCount + 1);
-            newPoints.push_back(p1.Lerp(p2, t));
-        }
-
-        // Add the end point of this segment (except for the very last one)
-        if (i < points.size() - 2) {
-            newPoints.push_back(p2);
-        }
-    }
-
-    // Keep the last point
-    newPoints.push_back(points.back());
-
-    points = std::move(newPoints);
-    pointCount = static_cast<int>(points.size());
 }
 
 // Operation implementations
@@ -654,39 +571,39 @@ void ExtraData::AddSubData(const ExtraSubData &data) {
     subData.push_back(data);
 }
 
-// BehaviorBlock implementations
-void BehaviorBlock::AddLink(const Link &link) {
+// Behavior implementations
+void BehaviorData::AddLink(const Link &link) {
     links.push_back(link);
     linkCount = static_cast<int>(links.size());
 }
 
-void BehaviorBlock::AddOperation(const Operation &op) {
+void BehaviorData::AddOperation(const Operation &op) {
     operations.push_back(op);
     operationCount = static_cast<int>(operations.size());
 }
 
-void BehaviorBlock::AddLocalParameter(const Parameter &param) {
+void BehaviorData::AddLocalParameter(const Parameter &param) {
     localParams.push_back(param);
     localParamCount = static_cast<int>(localParams.size());
 }
 
-void BehaviorBlock::AddSharedParameter(const Parameter &param) {
+void BehaviorData::AddSharedParameter(const Parameter &param) {
     sharedParams.push_back(param);
     sharedParamCount = static_cast<int>(sharedParams.size());
 }
 
-void BehaviorBlock::AddComment(const Comment &comment) {
+void BehaviorData::AddComment(const Comment &comment) {
     comments.push_back(comment);
     commentCount = static_cast<int>(comments.size());
 }
 
-Link *BehaviorBlock::FindLink(CK_ID linkId) {
+Link *BehaviorData::FindLink(CK_ID linkId) {
     const auto it = std::find_if(links.begin(), links.end(),
                            [linkId](const Link &link) { return link.id == linkId; });
     return it != links.end() ? &(*it) : nullptr;
 }
 
-std::vector<Link *> BehaviorBlock::FindLinksConnectedTo(CK_ID objId) {
+std::vector<Link *> BehaviorData::FindLinksConnectedTo(CK_ID objId) {
     std::vector<Link *> connectedLinks;
 
     for (auto &link : links) {
@@ -698,72 +615,41 @@ std::vector<Link *> BehaviorBlock::FindLinksConnectedTo(CK_ID objId) {
     return connectedLinks;
 }
 
-Operation *BehaviorBlock::FindOperation(CK_ID opId) {
+Operation *BehaviorData::FindOperation(CK_ID opId) {
     const auto it = std::find_if(operations.begin(), operations.end(),
                            [opId](const Operation &op) { return op.id == opId; });
     return it != operations.end() ? &(*it) : nullptr;
 }
 
-Parameter *BehaviorBlock::FindLocalParameter(CK_ID paramId) {
+Parameter *BehaviorData::FindLocalParameter(CK_ID paramId) {
     const auto it = std::find_if(localParams.begin(), localParams.end(),
                            [paramId](const Parameter &param) { return param.id == paramId; });
     return it != localParams.end() ? &(*it) : nullptr;
 }
 
-Parameter *BehaviorBlock::FindSharedParameter(CK_ID paramId) {
+Parameter *BehaviorData::FindSharedParameter(CK_ID paramId) {
     const auto it = std::find_if(sharedParams.begin(), sharedParams.end(),
                            [paramId](const Parameter &param) { return param.id == paramId; });
     return it != sharedParams.end() ? &(*it) : nullptr;
 }
 
-Parameter *BehaviorBlock::FindParameter(CK_ID paramId) {
+Parameter *BehaviorData::FindParameter(CK_ID paramId) {
     Parameter *param = FindLocalParameter(paramId);
     if (param) return param;
 
     return FindSharedParameter(paramId);
 }
 
-Comment *BehaviorBlock::FindComment(CK_ID commentId) {
+Comment *BehaviorData::FindComment(CK_ID commentId) {
     const auto it = std::find_if(comments.begin(), comments.end(),
                            [commentId](const Comment &comment) { return comment.id == commentId; });
     return it != comments.end() ? &(*it) : nullptr;
 }
 
-Rect BehaviorBlock::GetBoundingRect() const {
-    // Start with the block's own rect
-    Rect bounds = size;
-
-    // Expand for links
-    for (const auto &link : links) {
-        bounds.ExpandToInclude(link.GetBoundingRect());
-    }
-
-    // Expand for operations
-    for (const auto &op : operations) {
-        bounds.ExpandToInclude(op.hPos, op.vPos);
-    }
-
-    // Expand for comments
-    for (const auto &comment : comments) {
-        bounds.ExpandToInclude(Rect(comment.hPos, comment.vPos, comment.width, comment.height));
-    }
-
-    // Expand for parameters
-    for (const auto &param : localParams) {
-        bounds.ExpandToInclude(static_cast<float>(param.hPos), static_cast<float>(param.vPos));
-    }
-
-    for (const auto &param : sharedParams) {
-        bounds.ExpandToInclude(static_cast<float>(param.hPos), static_cast<float>(param.vPos));
-    }
-
-    return bounds;
-}
-
-std::vector<InterfaceElement *> BehaviorBlock::FindElementsAt(const Point &position, float tolerance) {
+std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &position, float tolerance) {
     std::vector<InterfaceElement *> elements;
 
-    // Check if position is within the block itself
+    // Check if position is within the behavior itself
     if (size.Contains(position)) {
         elements.push_back(this);
     }
@@ -806,7 +692,7 @@ std::vector<InterfaceElement *> BehaviorBlock::FindElementsAt(const Point &posit
     return elements;
 }
 
-void BehaviorBlock::Reset() {
+void BehaviorData::Reset() {
     folded = false;
     depth = 0;
     size = Rect();
@@ -833,7 +719,7 @@ void BehaviorBlock::Reset() {
     ClearMetadata();
 }
 
-std::vector<InterfaceElement *> BehaviorBlock::GetAllElements() {
+std::vector<InterfaceElement *> BehaviorData::GetAllElements() {
     std::vector<InterfaceElement *> elements;
 
     elements.push_back(this);
@@ -861,7 +747,7 @@ std::vector<InterfaceElement *> BehaviorBlock::GetAllElements() {
     return elements;
 }
 
-bool BehaviorBlock::RemoveElement(InterfaceElement *element) {
+bool BehaviorData::RemoveElement(InterfaceElement *element) {
     if (!element) return false;
 
     // Check element type and remove from appropriate container
@@ -923,35 +809,35 @@ InterfaceData::~InterfaceData() {
     Clear();
 }
 
-void InterfaceData::AddBehaviorBlock(BehaviorBlock &block) {
-    behaviorBlocks.push_back(block);
-    behaviorBlockCount = static_cast<int>(behaviorBlocks.size());
+void InterfaceData::AddBehavior(BehaviorData &behavior) {
+    behaviors.push_back(behavior);
+    behaviorCount = static_cast<int>(behaviors.size());
 
-    NotifyObservers(&block, ElementAction::Added);
+    NotifyObservers(&behavior, ElementAction::Added);
 }
 
-bool InterfaceData::RemoveBehaviorBlock(CK_ID blockId) {
-    auto it = std::find_if(behaviorBlocks.begin(), behaviorBlocks.end(),
-                           [blockId](const BehaviorBlock &block) { return block.id == blockId; });
+bool InterfaceData::RemoveBehavior(CK_ID behaviorId) {
+    auto it = std::find_if(behaviors.begin(), behaviors.end(),
+                           [behaviorId](const BehaviorData &behavior) { return behavior.id == behaviorId; });
 
-    if (it != behaviorBlocks.end()) {
+    if (it != behaviors.end()) {
         NotifyObservers(&(*it), ElementAction::Removed);
-        behaviorBlocks.erase(it);
-        behaviorBlockCount = static_cast<int>(behaviorBlocks.size());
+        behaviors.erase(it);
+        behaviorCount = static_cast<int>(behaviors.size());
         return true;
     }
 
     return false;
 }
 
-BehaviorBlock *InterfaceData::FindBehaviorBlock(CK_ID id) {
+BehaviorData *InterfaceData::FindBehavior(CK_ID id) {
     if (scriptRoot.id == id) {
         return &scriptRoot;
     }
 
-    const auto it = std::find_if(behaviorBlocks.begin(), behaviorBlocks.end(),
-                           [id](const BehaviorBlock &block) { return block.id == id; });
-    return it != behaviorBlocks.end() ? &(*it) : nullptr;
+    const auto it = std::find_if(behaviors.begin(), behaviors.end(),
+                           [id](const BehaviorData &behavior) { return behavior.id == id; });
+    return it != behaviors.end() ? &(*it) : nullptr;
 }
 
 void InterfaceData::AddExtraData(const ExtraData &data) {
@@ -962,8 +848,8 @@ void InterfaceData::Clear() {
     version = 0x16;
     start = StartPoint();
     scriptRoot.Reset();
-    behaviorBlocks.clear();
-    behaviorBlockCount = 0;
+    behaviors.clear();
+    behaviorCount = 0;
     extraDataVersion = 0;
     extraData.clear();
     userData.clear();
@@ -1011,38 +897,38 @@ std::vector<InterfaceElement *> InterfaceData::FindElementsById(CK_ID id) {
         result.push_back(&start);
     }
 
-    // Check all blocks
-    for (auto &block : behaviorBlocks) {
-        if (block.id == id) {
-            result.push_back(&block);
+    // Check all behaviors
+    for (auto &behavior : behaviors) {
+        if (behavior.id == id) {
+            result.push_back(&behavior);
         }
 
-        // Check elements within block
-        for (auto &link : block.links) {
+        // Check elements within behavior
+        for (auto &link : behavior.links) {
             if (link.id == id) {
                 result.push_back(&link);
             }
         }
 
-        for (auto &op : block.operations) {
+        for (auto &op : behavior.operations) {
             if (op.id == id) {
                 result.push_back(&op);
             }
         }
 
-        for (auto &comment : block.comments) {
+        for (auto &comment : behavior.comments) {
             if (comment.id == id) {
                 result.push_back(&comment);
             }
         }
 
-        for (auto &param : block.localParams) {
+        for (auto &param : behavior.localParams) {
             if (param.id == id) {
                 result.push_back(&param);
             }
         }
 
-        for (auto &param : block.sharedParams) {
+        for (auto &param : behavior.sharedParams) {
             if (param.id == id) {
                 result.push_back(&param);
             }
@@ -1055,10 +941,10 @@ std::vector<InterfaceElement *> InterfaceData::FindElementsById(CK_ID id) {
 std::vector<InterfaceElement *> InterfaceData::FindElementsAt(const Point &position, float tolerance) {
     std::vector<InterfaceElement *> elements;
 
-    // Check all blocks
-    for (auto &block : behaviorBlocks) {
-        auto blockElements = block.FindElementsAt(position, tolerance);
-        elements.insert(elements.end(), blockElements.begin(), blockElements.end());
+    // Check all behaviors
+    for (auto &behavior : behaviors) {
+        auto behaviorElements = behavior.FindElementsAt(position, tolerance);
+        elements.insert(elements.end(), behaviorElements.begin(), behaviorElements.end());
     }
 
     // Check script root
@@ -1078,26 +964,26 @@ std::vector<Link *> InterfaceData::FindLinksConnectedTo(CK_ID objId) {
         }
     }
 
-    // Check all behavior block links
-    for (auto &block : behaviorBlocks) {
-        auto blockLinks = block.FindLinksConnectedTo(objId);
-        connectedLinks.insert(connectedLinks.end(), blockLinks.begin(), blockLinks.end());
+    // Check all behavior links
+    for (auto &behavior : behaviors) {
+        auto behaviorLinks = behavior.FindLinksConnectedTo(objId);
+        connectedLinks.insert(connectedLinks.end(), behaviorLinks.begin(), behaviorLinks.end());
     }
 
     return connectedLinks;
 }
 
-std::vector<BehaviorBlock *> InterfaceData::GetSubTree(CK_ID rootId) {
-    std::vector<BehaviorBlock *> subTree;
+std::vector<BehaviorData *> InterfaceData::GetSubTree(CK_ID rootId) {
+    std::vector<BehaviorData *> subTree;
 
-    // Find the root block
-    BehaviorBlock *root = FindBehaviorBlock(rootId);
+    // Find the root behavior
+    BehaviorData *root = FindBehavior(rootId);
     if (!root) return subTree;
 
     // Add the root
     subTree.push_back(root);
 
-    // Simple breadth-first search to find connected blocks
+    // Simple breadth-first search to find connected behaviors
     std::set<CK_ID> visited;
     std::queue<CK_ID> queue;
 
@@ -1108,15 +994,15 @@ std::vector<BehaviorBlock *> InterfaceData::GetSubTree(CK_ID rootId) {
         CK_ID currentId = queue.front();
         queue.pop();
 
-        // Find all links from this block
+        // Find all links from this behavior
         auto links = FindLinksConnectedTo(currentId);
 
         for (auto *link : links) {
-            // If the link ends in a block we haven't visited
+            // If the link ends in a behavior we haven't visited
             if (link->end.IsBehaviorRelated() && visited.find(link->end.id) == visited.end()) {
-                BehaviorBlock *connectedBlock = FindBehaviorBlock(link->end.id);
-                if (connectedBlock) {
-                    subTree.push_back(connectedBlock);
+                BehaviorData *connectedBehavior = FindBehavior(link->end.id);
+                if (connectedBehavior) {
+                    subTree.push_back(connectedBehavior);
                     visited.insert(link->end.id);
                     queue.push(link->end.id);
                 }
@@ -1127,28 +1013,28 @@ std::vector<BehaviorBlock *> InterfaceData::GetSubTree(CK_ID rootId) {
     return subTree;
 }
 
-BehaviorBlock *InterfaceData::FindParentBlock(CK_ID blockId) {
-    // A block's parent is connected to it via a behavior link
-    auto links = FindLinksConnectedTo(blockId);
+BehaviorData *InterfaceData::FindParentBehavior(CK_ID behaviorId) {
+    // A behavior's parent is connected to it via a behavior link
+    auto links = FindLinksConnectedTo(behaviorId);
 
     for (auto *link : links) {
-        if (link->IsBehaviorLink() && link->end.id == blockId) {
-            return FindBehaviorBlock(link->start.id);
+        if (link->IsBehaviorLink() && link->end.id == behaviorId) {
+            return FindBehavior(link->start.id);
         }
     }
 
     return nullptr;
 }
 
-std::vector<BehaviorBlock *> InterfaceData::FindChildBlocks(CK_ID blockId) {
-    std::vector<BehaviorBlock *> children;
+std::vector<BehaviorData *> InterfaceData::FindChildBehaviors(CK_ID behaviorId) {
+    std::vector<BehaviorData *> children;
 
-    // Children are connected via behavior links from this block
-    auto links = FindLinksConnectedTo(blockId);
+    // Children are connected via behavior links from this behavior
+    auto links = FindLinksConnectedTo(behaviorId);
 
     for (auto *link : links) {
-        if (link->IsBehaviorLink() && link->start.id == blockId) {
-            BehaviorBlock *child = FindBehaviorBlock(link->end.id);
+        if (link->IsBehaviorLink() && link->start.id == behaviorId) {
+            BehaviorData *child = FindBehavior(link->end.id);
             if (child) {
                 children.push_back(child);
             }
@@ -1174,7 +1060,7 @@ bool InterfaceData::HasPath(CK_ID startId, CK_ID endId) {
             return true;
         }
 
-        // Find all links from this block
+        // Find all links from this behavior
         auto links = FindLinksConnectedTo(currentId);
 
         for (auto *link : links) {
@@ -1213,7 +1099,7 @@ std::vector<CK_ID> InterfaceData::FindPath(CK_ID startId, CK_ID endId) {
             break;
         }
 
-        // Find all links from this block
+        // Find all links from this behavior
         auto links = FindLinksConnectedTo(currentId);
 
         for (auto *link : links) {
@@ -1250,344 +1136,15 @@ std::vector<CK_ID> InterfaceData::FindPath(CK_ID startId, CK_ID endId) {
     return path;
 }
 
-std::map<CK_ID, std::vector<CK_ID>> InterfaceData::CreateDependencyGraph() {
-    std::map<CK_ID, std::vector<CK_ID>> dependencies;
-
-    // Initialize with all blocks
-    dependencies[scriptRoot.id] = std::vector<CK_ID>();
-    for (const auto &block : behaviorBlocks) {
-        dependencies[block.id] = std::vector<CK_ID>();
-    }
-
-    // Add dependencies based on behavior links
-    for (const auto &block : behaviorBlocks) {
-        for (const auto &link : block.links) {
-            if (link.IsBehaviorLink()) {
-                dependencies[link.start.id].push_back(link.end.id);
-            }
-        }
-    }
-
-    for (const auto &link : scriptRoot.links) {
-        if (link.IsBehaviorLink()) {
-            dependencies[link.start.id].push_back(link.end.id);
-        }
-    }
-
-    return dependencies;
+const BehaviorData &InterfaceData::GetBehaviorForContext(const SerializationContext &context) const {
+    return !context.isNotScript ? scriptRoot : behaviors[context.behaviorIndex];
 }
 
-bool InterfaceData::Validate(std::vector<std::string> &errors) {
-    bool valid = true;
-
-    // Check for duplicate IDs
-    std::unordered_map<CK_ID, std::vector<std::string>> idMap;
-
-    // Check script root
-    idMap[scriptRoot.id].emplace_back("ScriptRoot");
-
-    // Check all blocks
-    for (size_t i = 0; i < behaviorBlocks.size(); ++i) {
-        const auto &block = behaviorBlocks[i];
-        idMap[block.id].push_back("BehaviorBlock_" + std::to_string(i));
-
-        // Check elements within block
-        for (size_t j = 0; j < block.links.size(); ++j) {
-            const auto &link = block.links[j];
-            idMap[link.id].push_back("Link_" + std::to_string(i) + "_" + std::to_string(j));
-        }
-
-        for (size_t j = 0; j < block.operations.size(); ++j) {
-            const auto &op = block.operations[j];
-            idMap[op.id].push_back("Operation_" + std::to_string(i) + "_" + std::to_string(j));
-        }
-
-        for (size_t j = 0; j < block.comments.size(); ++j) {
-            const auto &comment = block.comments[j];
-            idMap[comment.id].push_back("Comment_" + std::to_string(i) + "_" + std::to_string(j));
-        }
-
-        for (size_t j = 0; j < block.localParams.size(); ++j) {
-            const auto &param = block.localParams[j];
-            idMap[param.id].push_back("LocalParam_" + std::to_string(i) + "_" + std::to_string(j));
-        }
-
-        for (size_t j = 0; j < block.sharedParams.size(); ++j) {
-            const auto &param = block.sharedParams[j];
-            idMap[param.id].push_back("SharedParam_" + std::to_string(i) + "_" + std::to_string(j));
-        }
-    }
-
-    // Find duplicates
-    for (const auto &pair : idMap) {
-        if (pair.second.size() > 1) {
-            valid = false;
-            std::string errorMsg = "Duplicate ID " + std::to_string(pair.first) + " used by: ";
-            for (const auto &usage : pair.second) {
-                errorMsg += usage + ", ";
-            }
-            errors.push_back(errorMsg);
-        }
-    }
-
-    // Check for dangling links
-    for (const auto & block : behaviorBlocks) {
-        for (const auto & link : block.links) {
-            // Check if start and end objects exist
-            if (FindElementsById(link.start.id).empty()) {
-                valid = false;
-                errors.push_back("Link " + std::to_string(link.id) + " has non-existent start object " +
-                    std::to_string(link.start.id));
-            }
-
-            if (FindElementsById(link.end.id).empty()) {
-                valid = false;
-                errors.push_back("Link " + std::to_string(link.id) + " has non-existent end object " +
-                    std::to_string(link.end.id));
-            }
-        }
-    }
-
-    // Check script root links
-    for (const auto & link : scriptRoot.links) {
-        // Check if start and end objects exist
-        if (FindElementsById(link.start.id).empty()) {
-            valid = false;
-            errors.push_back("Script root link " + std::to_string(link.id) + " has non-existent start object " +
-                std::to_string(link.start.id));
-        }
-
-        if (FindElementsById(link.end.id).empty()) {
-            valid = false;
-            errors.push_back("Script root link " + std::to_string(link.id) + " has non-existent end object " +
-                std::to_string(link.end.id));
-        }
-    }
-
-    // Check for cycles in the dependency graph
-    auto dependencies = CreateDependencyGraph();
-    std::set<CK_ID> visited;
-    std::set<CK_ID> currentPath;
-
-    std::function<bool(CK_ID)> hasCycle = [&](CK_ID nodeId) -> bool {
-        if (currentPath.find(nodeId) != currentPath.end()) {
-            // Cycle detected
-            return true;
-        }
-
-        if (visited.find(nodeId) != visited.end()) {
-            // Already checked, no cycle
-            return false;
-        }
-
-        visited.insert(nodeId);
-        currentPath.insert(nodeId);
-
-        for (CK_ID dependentId : dependencies[nodeId]) {
-            if (hasCycle(dependentId)) {
-                return true;
-            }
-        }
-
-        currentPath.erase(nodeId);
-        return false;
-    };
-
-    for (const auto &pair : dependencies) {
-        if (hasCycle(pair.first)) {
-            valid = false;
-            errors.push_back("Cycle detected in dependency graph starting from block " +
-                std::to_string(pair.first));
-            break;
-        }
-    }
-
-    return valid;
+BehaviorData &InterfaceData::GetBehaviorForContext(SerializationContext &context) {
+    return !context.isNotScript ? scriptRoot : behaviors[context.behaviorIndex];
 }
 
-int InterfaceData::Repair() {
-    int fixed = 0;
-
-    // Remove dangling links
-    for (auto &block : behaviorBlocks) {
-        size_t originalSize = block.links.size();
-
-        block.links.erase(
-            std::remove_if(block.links.begin(), block.links.end(),
-                           [this](const Link &link) {
-                               return FindElementsById(link.start.id).empty() ||
-                                   FindElementsById(link.end.id).empty();
-                           }),
-            block.links.end()
-        );
-
-        if (block.links.size() != originalSize) {
-            fixed += static_cast<int>(originalSize - block.links.size());
-            block.linkCount = static_cast<int>(block.links.size());
-        }
-    }
-
-    // Remove dangling links from script root
-    size_t originalSize = scriptRoot.links.size();
-
-    scriptRoot.links.erase(
-        std::remove_if(scriptRoot.links.begin(), scriptRoot.links.end(),
-                       [this](const Link &link) {
-                           return FindElementsById(link.start.id).empty() ||
-                               FindElementsById(link.end.id).empty();
-                       }),
-        scriptRoot.links.end()
-    );
-
-    if (scriptRoot.links.size() != originalSize) {
-        fixed += static_cast<int>(originalSize - scriptRoot.links.size());
-        scriptRoot.linkCount = static_cast<int>(scriptRoot.links.size());
-    }
-
-    return fixed;
-}
-
-void InterfaceData::Offset(float h, float v) {
-    // Offset script root
-    scriptRoot.size.Offset(h, v);
-    for (auto &link : scriptRoot.links) {
-        link.Offset(h, v);
-    }
-    for (auto &op : scriptRoot.operations) {
-        op.hPos += h;
-        op.vPos += v;
-    }
-    for (auto &comment : scriptRoot.comments) {
-        comment.hPos += h;
-        comment.vPos += v;
-    }
-    for (auto &param : scriptRoot.localParams) {
-        param.hPos += static_cast<int>(h);
-        param.vPos += static_cast<int>(v);
-    }
-    for (auto &param : scriptRoot.sharedParams) {
-        param.hPos += static_cast<int>(h);
-        param.vPos += static_cast<int>(v);
-    }
-
-    // Offset all blocks
-    for (auto &block : behaviorBlocks) {
-        block.size.Offset(h, v);
-        for (auto &link : block.links) {
-            link.Offset(h, v);
-        }
-        for (auto &op : block.operations) {
-            op.hPos += h;
-            op.vPos += v;
-        }
-        for (auto &comment : block.comments) {
-            comment.hPos += h;
-            comment.vPos += v;
-        }
-        for (auto &param : block.localParams) {
-            param.hPos += static_cast<int>(h);
-            param.vPos += static_cast<int>(v);
-        }
-        for (auto &param : block.sharedParams) {
-            param.hPos += static_cast<int>(h);
-            param.vPos += static_cast<int>(v);
-        }
-    }
-
-    // Offset start point
-    start.hStartPos += h;
-    start.vStartPos += v;
-
-    NotifyObservers(nullptr, ElementAction::Modified);
-}
-
-void InterfaceData::Scale(float factor) {
-    // Find center point for scaling
-    Rect bounds = GetBoundingRect();
-    Point center(bounds.CenterX(), bounds.CenterY());
-
-    // Scale script root
-    scriptRoot.size.Scale(factor);
-    for (auto &link : scriptRoot.links) {
-        link.Scale(factor, center);
-    }
-    for (auto &op : scriptRoot.operations) {
-        op.hPos = center.h + (op.hPos - center.h) * factor;
-        op.vPos = center.v + (op.vPos - center.v) * factor;
-    }
-    for (auto &comment : scriptRoot.comments) {
-        comment.hPos = center.h + (comment.hPos - center.h) * factor;
-        comment.vPos = center.v + (comment.vPos - center.v) * factor;
-        comment.width *= factor;
-        comment.height *= factor;
-    }
-    for (auto &param : scriptRoot.localParams) {
-        param.hPos = static_cast<int>(center.h + (static_cast<float>(param.hPos) - center.h) * factor);
-        param.vPos = static_cast<int>(center.v + (static_cast<float>(param.vPos) - center.v) * factor);
-    }
-    for (auto &param : scriptRoot.sharedParams) {
-        param.hPos = static_cast<int>(center.h + (static_cast<float>(param.hPos) - center.h) * factor);
-        param.vPos = static_cast<int>(center.v + (static_cast<float>(param.vPos) - center.v) * factor);
-    }
-
-    // Scale all blocks
-    for (auto &block : behaviorBlocks) {
-        block.size.Scale(factor);
-        for (auto &link : block.links) {
-            link.Scale(factor, center);
-        }
-        for (auto &op : block.operations) {
-            op.hPos = center.h + (op.hPos - center.h) * factor;
-            op.vPos = center.v + (op.vPos - center.v) * factor;
-        }
-        for (auto &comment : block.comments) {
-            comment.hPos = center.h + (comment.hPos - center.h) * factor;
-            comment.vPos = center.v + (comment.vPos - center.v) * factor;
-            comment.width *= factor;
-            comment.height *= factor;
-        }
-        for (auto &param : block.localParams) {
-            param.hPos = static_cast<int>(center.h + (static_cast<float>(param.hPos) - center.h) * factor);
-            param.vPos = static_cast<int>(center.v + (static_cast<float>(param.vPos) - center.v) * factor);
-        }
-        for (auto &param : block.sharedParams) {
-            param.hPos = static_cast<int>(center.h + (static_cast<float>(param.hPos) - center.h) * factor);
-            param.vPos = static_cast<int>(center.v + (static_cast<float>(param.vPos) - center.v) * factor);
-        }
-    }
-
-    // Scale start point
-    start.hStartPos = center.h + (start.hStartPos - center.h) * factor;
-    start.vStartPos = center.v + (start.vStartPos - center.v) * factor;
-    start.vSize *= factor;
-
-    NotifyObservers(nullptr, ElementAction::Modified);
-}
-
-Rect InterfaceData::GetBoundingRect() const {
-    // Start with script root
-    Rect bounds = scriptRoot.GetBoundingRect();
-
-    // Expand for behavior blocks
-    for (const auto &block : behaviorBlocks) {
-        bounds.ExpandToInclude(block.GetBoundingRect());
-    }
-
-    // Expand for start point
-    bounds.ExpandToInclude(start.hStartPos, start.vStartPos);
-
-    return bounds;
-}
-
-const BehaviorBlock &InterfaceData::GetBehaviorBlockForContext(const SerializationContext &context) const {
-    return !context.isNotScript ? scriptRoot : behaviorBlocks[context.blockIndex];
-}
-
-BehaviorBlock &InterfaceData::GetBehaviorBlockForContext(SerializationContext &context) {
-    return !context.isNotScript ? scriptRoot : behaviorBlocks[context.blockIndex];
-}
-
-CKBOOL InterfaceData::LoadBlockHeader(SerializationContext &context, BehaviorBlock &block) {
+CKBOOL InterfaceData::LoadBehaviorHeader(SerializationContext &context, BehaviorData &behavior) {
     CKContext *ckContext = context.behavior->GetCKContext();
     CKStateChunk *chunk = context.chunk;
 
@@ -1608,15 +1165,15 @@ CKBOOL InterfaceData::LoadBlockHeader(SerializationContext &context, BehaviorBlo
     context.behavior = beh;
     context.isBuildingBlock = (beh->GetFlags() & CKBEHAVIOR_BUILDINGBLOCK) != 0;
 
-    // Populate the block
-    block.id = behID;
-    block.folded = (flag & 0x200) != 0;
+    // Populate the behavior
+    behavior.id = behID;
+    behavior.folded = (flag & 0x200) != 0;
 
     // Read position
     const float x = chunk->ReadFloat();
     const float y = chunk->ReadFloat();
-    block.size.hPos = x;
-    block.size.vPos = y;
+    behavior.size.hPos = x;
+    behavior.size.vPos = y;
 
     if (!context.isNotScript) {
         // Script-specific data
@@ -1643,33 +1200,33 @@ CKBOOL InterfaceData::LoadBlockHeader(SerializationContext &context, BehaviorBlo
             start.headerColor = chunk->ReadDword();
         }
     } else {
-        // Behavior block specific data
-        block.depth = index;
+        // behavior specific data
+        behavior.depth = index;
 
         // Read size
         const float width = chunk->ReadFloat();
         const float height = chunk->ReadFloat();
-        block.size.hSize = width;
-        block.size.vSize = height;
+        behavior.size.hSize = width;
+        behavior.size.vSize = height;
 
         // Read expanded size
         const float expandWidth = chunk->ReadFloat();
         const float expandHeight = chunk->ReadFloat();
-        block.hExpandSize = expandWidth;
-        block.vExpandSize = expandHeight;
+        behavior.hExpandSize = expandWidth;
+        behavior.vExpandSize = expandHeight;
     }
 
     return TRUE;
 }
 
-void InterfaceData::LoadBlockLinks(SerializationContext &context, BehaviorBlock &block) {
+void InterfaceData::LoadBehaviorLinks(SerializationContext &context, BehaviorData &behavior) {
     CKStateChunk *chunk = context.chunk;
 
     // Read link count
     const int linkCount = chunk->ReadInt();
-    block.links.clear();
-    block.links.reserve(linkCount);
-    block.linkCount = linkCount;
+    behavior.links.clear();
+    behavior.links.reserve(linkCount);
+    behavior.linkCount = linkCount;
 
     // Read each link
     for (int i = 0; i < linkCount; ++i) {
@@ -1699,19 +1256,19 @@ void InterfaceData::LoadBlockLinks(SerializationContext &context, BehaviorBlock 
         link.end.index = chunk->ReadInt();
         link.end.type = static_cast<EndpointType>(chunk->ReadDword());
 
-        // Add the link to the block
-        block.links.push_back(link);
+        // Add the link to the behavior
+        behavior.links.push_back(link);
     }
 }
 
-void InterfaceData::LoadBlockOperations(SerializationContext &context, BehaviorBlock &block) {
+void InterfaceData::LoadBehaviorOperations(SerializationContext &context, BehaviorData &behavior) {
     CKStateChunk *chunk = context.chunk;
 
     // Read operation count
     const int opCount = chunk->ReadInt();
-    block.operations.clear();
-    block.operations.reserve(opCount);
-    block.operationCount = opCount;
+    behavior.operations.clear();
+    behavior.operations.reserve(opCount);
+    behavior.operationCount = opCount;
 
     // Read each operation
     for (int i = 0; i < opCount; ++i) {
@@ -1722,19 +1279,19 @@ void InterfaceData::LoadBlockOperations(SerializationContext &context, BehaviorB
         op.hPos = chunk->ReadFloat();
         op.vPos = chunk->ReadFloat();
 
-        // Add the operation to the block
-        block.operations.push_back(op);
+        // Add the operation to the behavior
+        behavior.operations.push_back(op);
     }
 }
 
-void InterfaceData::LoadBlockComments(SerializationContext &context, BehaviorBlock &block) {
+void InterfaceData::LoadBehaviorComments(SerializationContext &context, BehaviorData &behavior) {
     CKStateChunk *chunk = context.chunk;
 
     // Read comment count
     const int commentCount = chunk->ReadInt();
-    block.comments.clear();
-    block.comments.reserve(commentCount);
-    block.commentCount = commentCount;
+    behavior.comments.clear();
+    behavior.comments.reserve(commentCount);
+    behavior.commentCount = commentCount;
 
     // Read each comment
     for (int i = 0; i < commentCount; ++i) {
@@ -1762,50 +1319,50 @@ void InterfaceData::LoadBlockComments(SerializationContext &context, BehaviorBlo
             comment.styleFlags = chunk->ReadDword();
         }
 
-        // Add the comment to the block
-        block.comments.push_back(comment);
+        // Add the comment to the behavior
+        behavior.comments.push_back(comment);
     }
 }
 
-void InterfaceData::LoadBlockParameters(SerializationContext &context, BehaviorBlock &block) {
+void InterfaceData::LoadBehaviorParameters(SerializationContext &context, BehaviorData &behavior) {
     CKStateChunk *chunk = context.chunk;
 
     // Read local parameter count
     const int localParamCount = chunk->ReadInt();
-    block.localParams.clear();
-    block.localParams.reserve(localParamCount);
-    block.localParamCount = localParamCount;
+    behavior.localParams.clear();
+    behavior.localParams.reserve(localParamCount);
+    behavior.localParamCount = localParamCount;
 
     // Read local parameter positions
     for (int i = 0; i < localParamCount; ++i) {
         Parameter param;
         param.hPos = chunk->ReadInt();
         param.vPos = chunk->ReadInt();
-        block.localParams.push_back(param);
+        behavior.localParams.push_back(param);
     }
 
     // Read local parameter styles
     for (int i = 0; i < localParamCount; ++i) {
-        block.localParams[i].style = static_cast<ParameterStyle>(chunk->ReadInt());
+        behavior.localParams[i].style = static_cast<ParameterStyle>(chunk->ReadInt());
     }
 
     // Read shared parameter count
     const int paramShortcutCount = chunk->ReadInt();
-    block.sharedParams.clear();
-    block.sharedParams.reserve(paramShortcutCount);
-    block.sharedParamCount = paramShortcutCount;
+    behavior.sharedParams.clear();
+    behavior.sharedParams.reserve(paramShortcutCount);
+    behavior.sharedParamCount = paramShortcutCount;
 
     // Read shared parameter positions
     for (int i = 0; i < paramShortcutCount; ++i) {
         Parameter param;
         param.hPos = chunk->ReadInt();
         param.vPos = chunk->ReadInt();
-        block.sharedParams.push_back(param);
+        behavior.sharedParams.push_back(param);
     }
 
     // Read shared parameter styles
     for (int i = 0; i < paramShortcutCount; ++i) {
-        block.sharedParams[i].style = static_cast<ParameterStyle>(chunk->ReadInt());
+        behavior.sharedParams[i].style = static_cast<ParameterStyle>(chunk->ReadInt());
     }
 
     // Read shared parameter sources
@@ -1818,63 +1375,63 @@ void InterfaceData::LoadBlockParameters(SerializationContext &context, BehaviorB
             paramShortcutSourceID = chunk->ReadObjectID();
             chunk->ReadInt();
         }
-        block.sharedParams[i].sourceId = paramShortcutSourceID;
+        behavior.sharedParams[i].sourceId = paramShortcutSourceID;
     }
 }
 
-void InterfaceData::LoadBlockGraph(SerializationContext &context, BehaviorBlock &block) {
+void InterfaceData::LoadBehaviorGraph(SerializationContext &context, BehaviorData &behavior) {
     CKStateChunk *chunk = context.chunk;
 
     // Mark as a behavior graph
-    block.isBehaviorGraph = true;
+    behavior.isBehaviorGraph = true;
 
     // Read inward inputs
     const int inwardInputCount = chunk->ReadInt();
-    block.inwardInputs.clear();
-    block.inwardInputs.reserve(inwardInputCount);
+    behavior.inwardInputs.clear();
+    behavior.inwardInputs.reserve(inwardInputCount);
 
     for (int i = 0; i < inwardInputCount; ++i) {
         int inputValue = chunk->ReadInt();
-        block.inwardInputs.push_back(inputValue);
+        behavior.inwardInputs.push_back(inputValue);
         chunk->ReadInt(); // Skip extra value
     }
 
     // Read outward inputs
     const int outwardInputCount = chunk->ReadInt();
-    block.outwardInputs.clear();
-    block.outwardInputs.reserve(outwardInputCount);
+    behavior.outwardInputs.clear();
+    behavior.outwardInputs.reserve(outwardInputCount);
 
     for (int i = 0; i < outwardInputCount; ++i) {
         int inputValue = chunk->ReadInt();
-        block.outwardInputs.push_back(inputValue);
+        behavior.outwardInputs.push_back(inputValue);
         chunk->ReadInt(); // Skip extra value
     }
 
     // Read inward outputs
     const int inwardOutputCount = chunk->ReadInt();
-    block.inwardOutputs.clear();
-    block.inwardOutputs.reserve(inwardOutputCount);
+    behavior.inwardOutputs.clear();
+    behavior.inwardOutputs.reserve(inwardOutputCount);
 
     for (int i = 0; i < inwardOutputCount; ++i) {
         int outputValue = chunk->ReadInt();
-        block.inwardOutputs.push_back(outputValue);
+        behavior.inwardOutputs.push_back(outputValue);
         chunk->ReadInt(); // Skip extra value
     }
 
     // Read outward outputs
     const int outwardOutputCount = chunk->ReadInt();
-    block.outwardOutputs.clear();
-    block.outwardOutputs.reserve(outwardOutputCount);
+    behavior.outwardOutputs.clear();
+    behavior.outwardOutputs.reserve(outwardOutputCount);
 
     for (int i = 0; i < outwardOutputCount; ++i) {
         int outputValue = chunk->ReadInt();
-        block.outwardOutputs.push_back(outputValue);
+        behavior.outwardOutputs.push_back(outputValue);
         chunk->ReadInt(); // Skip extra value
     }
 
     // Update input and output counts
-    block.inputCount = inwardInputCount + outwardInputCount;
-    block.outputCount = inwardOutputCount + outwardOutputCount;
+    behavior.inputCount = inwardInputCount + outwardInputCount;
+    behavior.outputCount = inwardOutputCount + outwardOutputCount;
 }
 
 void InterfaceData::LoadExtraData(SerializationContext &context) {
@@ -1963,7 +1520,7 @@ void InterfaceData::LoadExtraData(SerializationContext &context) {
     }
 }
 
-CKBOOL InterfaceData::SaveBlockHeader(SerializationContext &context) {
+CKBOOL InterfaceData::SaveBehaviorHeader(SerializationContext &context) {
     CKBehavior *beh = context.behavior;
     if (!beh)
         return FALSE;
@@ -1972,20 +1529,20 @@ CKBOOL InterfaceData::SaveBlockHeader(SerializationContext &context) {
     context.isBuildingBlock = (beh->GetFlags() & CKBEHAVIOR_BUILDINGBLOCK) != 0;
 
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Write behavior object reference
     chunk->WriteObject(beh);
 
     // Write flags
-    CKDWORD flag = block.folded ? 0x200 : 0;
+    CKDWORD flag = behavior.folded ? 0x200 : 0;
     chunk->WriteDword(flag);
 
     if (!context.isNotScript) {
         // Save script-specific data
         chunk->WriteDword(context.scriptIndex++); // index
-        chunk->WriteFloat(block.size.hPos);
-        chunk->WriteFloat(block.size.vPos);
+        chunk->WriteFloat(behavior.size.hPos);
+        chunk->WriteFloat(behavior.size.vPos);
         chunk->WriteFloat(start.hStartPos);
         chunk->WriteFloat(start.vStartPos);
         chunk->WriteFloat(start.vSize);
@@ -1993,25 +1550,25 @@ CKBOOL InterfaceData::SaveBlockHeader(SerializationContext &context) {
         chunk->WriteDword(start.headerColor);
     } else {
         // Save behavior-specific data
-        chunk->WriteDword(block.depth);
-        chunk->WriteFloat(block.size.hPos);
-        chunk->WriteFloat(block.size.vPos);
-        chunk->WriteFloat(block.size.hSize);
-        chunk->WriteFloat(block.size.vSize);
-        chunk->WriteFloat(block.hExpandSize);
-        chunk->WriteFloat(block.vExpandSize);
+        chunk->WriteDword(behavior.depth);
+        chunk->WriteFloat(behavior.size.hPos);
+        chunk->WriteFloat(behavior.size.vPos);
+        chunk->WriteFloat(behavior.size.hSize);
+        chunk->WriteFloat(behavior.size.vSize);
+        chunk->WriteFloat(behavior.hExpandSize);
+        chunk->WriteFloat(behavior.vExpandSize);
     }
 
     return TRUE;
 }
 
-void InterfaceData::SaveBlockLinks(SerializationContext &context) {
+void InterfaceData::SaveBehaviorLinks(SerializationContext &context) {
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Write link count and data
-    chunk->WriteInt(block.links.size());
-    for (const auto &link : block.links) {
+    chunk->WriteInt(behavior.links.size());
+    for (const auto &link : behavior.links) {
         chunk->WriteInt(static_cast<int>(link.type));
         chunk->WriteObjectID(link.id);
         chunk->WriteObjectID(link.start.id);
@@ -2028,26 +1585,26 @@ void InterfaceData::SaveBlockLinks(SerializationContext &context) {
     }
 }
 
-void InterfaceData::SaveBlockOperations(SerializationContext &context) {
+void InterfaceData::SaveBehaviorOperations(SerializationContext &context) {
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Write operation count and data
-    chunk->WriteInt(block.operations.size());
-    for (const auto &op : block.operations) {
+    chunk->WriteInt(behavior.operations.size());
+    for (const auto &op : behavior.operations) {
         chunk->WriteObjectID(op.id);
         chunk->WriteFloat(op.hPos);
         chunk->WriteFloat(op.vPos);
     }
 }
 
-void InterfaceData::SaveBlockComments(SerializationContext &context) {
+void InterfaceData::SaveBehaviorComments(SerializationContext &context) {
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Write comment count and data
-    chunk->WriteInt(block.comments.size());
-    for (const auto &comment : block.comments) {
+    chunk->WriteInt(behavior.comments.size());
+    for (const auto &comment : behavior.comments) {
         // Write comment rectangle
         chunk->WriteFloat(comment.hPos);
         chunk->WriteFloat(comment.vPos);
@@ -2064,59 +1621,59 @@ void InterfaceData::SaveBlockComments(SerializationContext &context) {
     }
 }
 
-void InterfaceData::SaveBlockParameters(SerializationContext &context) {
+void InterfaceData::SaveBehaviorParameters(SerializationContext &context) {
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Save local parameters
-    chunk->WriteInt(block.localParams.size());
-    for (const auto &param : block.localParams) {
+    chunk->WriteInt(behavior.localParams.size());
+    for (const auto &param : behavior.localParams) {
         chunk->WriteInt(param.hPos);
         chunk->WriteInt(param.vPos);
     }
-    for (const auto &param : block.localParams) {
+    for (const auto &param : behavior.localParams) {
         chunk->WriteInt(param.style);
     }
 
     // Save shared parameters
-    chunk->WriteInt(block.sharedParams.size());
-    for (const auto &param : block.sharedParams) {
+    chunk->WriteInt(behavior.sharedParams.size());
+    for (const auto &param : behavior.sharedParams) {
         chunk->WriteInt(param.hPos);
         chunk->WriteInt(param.vPos);
     }
-    for (const auto &param : block.sharedParams) {
+    for (const auto &param : behavior.sharedParams) {
         chunk->WriteInt(param.style);
     }
-    for (const auto &param : block.sharedParams) {
+    for (const auto &param : behavior.sharedParams) {
         chunk->WriteObjectID(param.sourceId);
     }
 }
 
-void InterfaceData::SaveBlockGraph(SerializationContext &context) {
+void InterfaceData::SaveBehaviorGraph(SerializationContext &context) {
     CKStateChunk *chunk = context.chunk;
-    const BehaviorBlock &block = GetBehaviorBlockForContext(context);
+    const BehaviorData &behavior = GetBehaviorForContext(context);
 
     // Save inputs and outputs for graph
-    chunk->WriteInt(block.inwardInputs.size());
-    for (const auto &input : block.inwardInputs) {
+    chunk->WriteInt(behavior.inwardInputs.size());
+    for (const auto &input : behavior.inwardInputs) {
         chunk->WriteInt(input);
         chunk->WriteInt(-1);
     }
 
-    chunk->WriteInt(block.outwardInputs.size());
-    for (const auto &input : block.outwardInputs) {
+    chunk->WriteInt(behavior.outwardInputs.size());
+    for (const auto &input : behavior.outwardInputs) {
         chunk->WriteInt(input);
         chunk->WriteInt(-1);
     }
 
-    chunk->WriteInt(block.inwardOutputs.size());
-    for (const auto &output : block.inwardOutputs) {
+    chunk->WriteInt(behavior.inwardOutputs.size());
+    for (const auto &output : behavior.inwardOutputs) {
         chunk->WriteInt(output);
         chunk->WriteInt(1);
     }
 
-    chunk->WriteInt(block.outwardOutputs.size());
-    for (const auto &output : block.outwardOutputs) {
+    chunk->WriteInt(behavior.outwardOutputs.size());
+    for (const auto &output : behavior.outwardOutputs) {
         chunk->WriteInt(output);
         chunk->WriteInt(1);
     }
@@ -2239,37 +1796,37 @@ CKERROR InterfaceData::LoadFromChunk(CKBehavior *behavior, CKStateChunk *chunk) 
         return CKERR_NOTIMPLEMENTED;
     }
 
-    // Read block count
+    // Read behavior count
     const int count = chunk->ReadInt();
-    behaviorBlockCount = count - 1; // Subtract 1 for the root
-    behaviorBlocks.resize(behaviorBlockCount);
+    behaviorCount = count - 1; // Subtract 1 for the root
+    behaviors.resize(behaviorCount);
 
-    // Read each block
+    // Read each behavior
     for (int i = 0; i < count; ++i) {
         if (i != 0) {
             CK_ID behID = chunk->ReadObjectID();
-            CKBehavior *blockBeh = (CKBehavior *) ckContext->GetObject(behID);
-            if (!blockBeh) {
+            CKBehavior *beh = (CKBehavior *) ckContext->GetObject(behID);
+            if (!beh) {
                 ckContext->OutputToConsoleEx((CKSTRING) "Error: Behavior <%s> not found", behID);
                 return CKERR_NOTFOUND;
             }
-            context.behavior = blockBeh;
+            context.behavior = beh;
         }
 
-        context.blockIndex = i - 1;
-        BehaviorBlock *targetBlock = (i == 0) ? &scriptRoot : &behaviorBlocks[i - 1];
+        context.behaviorIndex = i - 1;
+        BehaviorData *targetBehavior = (i == 0) ? &scriptRoot : &behaviors[i - 1];
 
-        if (LoadBlockHeader(context, *targetBlock)) {
+        if (LoadBehaviorHeader(context, *targetBehavior)) {
             if (!(context.flags & 0x8000)) {
-                LoadBlockLinks(context, *targetBlock);
-                LoadBlockOperations(context, *targetBlock);
-                LoadBlockComments(context, *targetBlock);
+                LoadBehaviorLinks(context, *targetBehavior);
+                LoadBehaviorOperations(context, *targetBehavior);
+                LoadBehaviorComments(context, *targetBehavior);
 
                 if (!context.isBuildingBlock)
-                    LoadBlockParameters(context, *targetBlock);
+                    LoadBehaviorParameters(context, *targetBehavior);
 
                 if (context.isNotScript && (context.version == 0x12 || !context.isBuildingBlock))
-                    LoadBlockGraph(context, *targetBlock);
+                    LoadBehaviorGraph(context, *targetBehavior);
             }
             context.isNotScript = TRUE;
         }
@@ -2333,48 +1890,48 @@ CKERROR InterfaceData::SaveToChunk(CKBehavior *behavior, CKStateChunk *chunk) {
     // Write header information
     chunk->WriteIdentifier(1);
     chunk->WriteDword(context.version);
-    const int count = behaviorBlockCount + 1;
+    const int count = behaviorCount + 1;
     chunk->WriteInt(count);
 
-    // Process each behavior block
+    // Process each behavior
     context.scriptIndex = 0;
-    context.blockIndex = 0;
+    context.behaviorIndex = 0;
 
     // First, write the script root
     context.behavior = behavior;
-    if (SaveBlockHeader(context)) {
-        SaveBlockLinks(context);
-        SaveBlockOperations(context);
-        SaveBlockComments(context);
-        SaveBlockParameters(context);
+    if (SaveBehaviorHeader(context)) {
+        SaveBehaviorLinks(context);
+        SaveBehaviorOperations(context);
+        SaveBehaviorComments(context);
+        SaveBehaviorParameters(context);
 
         if (context.isNotScript)
-            SaveBlockGraph(context);
+            SaveBehaviorGraph(context);
     }
 
-    // Then, write each additional block
-    for (int i = 0; i < behaviorBlockCount; ++i) {
-        const BehaviorBlock &bb = behaviorBlocks[i];
-        context.behavior = (CKBehavior *) context.behavior->GetCKContext()->GetObject(bb.id);
+    // Then, write each additional behavior
+    for (int i = 0; i < behaviorCount; ++i) {
+        const BehaviorData &bb = behaviors[i];
+        context.behavior = (CKBehavior *) behavior->GetCKContext()->GetObject(bb.id);
         if (!context.behavior) {
-            context.behavior->GetCKContext()->OutputToConsoleEx((CKSTRING) "Error: Behavior <%s> not found", bb.id);
+            behavior->GetCKContext()->OutputToConsoleEx((CKSTRING) "Error: Behavior <%s> not found", bb.id);
             return CKERR_NOTFOUND;
         }
 
-        context.blockIndex = i;
+        context.behaviorIndex = i;
         context.isNotScript = (context.behavior->GetType() & CKBEHAVIORTYPE_SCRIPT) == 0;
         context.isBuildingBlock = (context.behavior->GetFlags() & CKBEHAVIOR_BUILDINGBLOCK) != 0;
 
-        if (SaveBlockHeader(context)) {
-            SaveBlockLinks(context);
-            SaveBlockOperations(context);
-            SaveBlockComments(context);
+        if (SaveBehaviorHeader(context)) {
+            SaveBehaviorLinks(context);
+            SaveBehaviorOperations(context);
+            SaveBehaviorComments(context);
 
             if (!context.isBuildingBlock)
-                SaveBlockParameters(context);
+                SaveBehaviorParameters(context);
 
             if (context.isNotScript && !context.isBuildingBlock)
-                SaveBlockGraph(context);
+                SaveBehaviorGraph(context);
         }
     }
 

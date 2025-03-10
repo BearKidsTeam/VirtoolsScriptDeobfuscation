@@ -5,7 +5,6 @@
 #include <vector>
 #include <memory>
 #include <string>
-#include <map>
 #include <unordered_map>
 #include <functional>
 
@@ -89,7 +88,7 @@ struct Comment;
 struct Parameter;
 struct ExtraSubData;
 struct ExtraData;
-struct BehaviorBlock;
+struct BehaviorData;
 
 // A simple replacement for std::any for C++11 compatibility
 class MetadataValue {
@@ -492,11 +491,6 @@ struct Rect : InterfaceElement {
      * @brief Offsets the rectangle by the specified amounts
      */
     void Offset(float horizontal, float vertical);
-
-    /**
-     * @brief Scales the rectangle from its center
-     */
-    void Scale(float factor);
 };
 
 /**
@@ -591,8 +585,7 @@ struct Link : InterfaceElement {
     /**
      * @brief Constructor with all fields
      */
-    Link(CK_ID linkId, LinkType linkType,
-         LinkEndpoint startPoint, LinkEndpoint endPoint)
+    Link(CK_ID linkId, LinkType linkType, LinkEndpoint startPoint, LinkEndpoint endPoint)
         : InterfaceElement(linkId), type(linkType), start(std::move(startPoint)), end(std::move(endPoint)) {}
 
     /**
@@ -631,16 +624,6 @@ struct Link : InterfaceElement {
     bool IsParameterOpLink() const;
 
     /**
-     * @brief Optimizes control points by removing redundant ones
-     */
-    void OptimizePath();
-
-    /**
-     * @brief Gets the bounding rect of the link
-     */
-    Rect GetBoundingRect() const;
-
-    /**
      * @brief Offsets all control points by the given amount
      */
     void Offset(float h, float v);
@@ -664,12 +647,6 @@ struct Link : InterfaceElement {
      * @brief Checks if the link passes near a point within the specified distance
      */
     bool PassesNear(const Point &point, float maxDistance) const;
-
-    /**
-     * @brief Creates a smoother path between endpoints by adding intermediate points
-     * @param segmentCount Number of segments to create
-     */
-    void CreateSmoothPath(int segmentCount);
 };
 
 /**
@@ -918,10 +895,10 @@ public:
 };
 
 /**
- * @struct BehaviorBlock
- * @brief Represents a behavior building block in the tree
+ * @struct BehaviorData
+ * @brief Represents a behavior in the tree
  */
-struct BehaviorBlock : InterfaceElement {
+struct BehaviorData : InterfaceElement {
     bool folded = false;          ///< Whether the block is collapsed
     CKDWORD depth = 0;            ///< Depth in the behavior hierarchy
     Rect size;                    ///< Size and position of the block
@@ -957,32 +934,32 @@ struct BehaviorBlock : InterfaceElement {
     std::vector<int> inwardOutputs;  ///< Inward-facing outputs
     std::vector<int> outwardOutputs; ///< Outward-facing outputs
 
-    BehaviorBlock() = default;
+    BehaviorData() = default;
 
-    explicit BehaviorBlock(CK_ID blockId) : InterfaceElement(blockId) {}
+    explicit BehaviorData(CK_ID behaviorId) : InterfaceElement(behaviorId) {}
 
     /**
-     * @brief Adds a link to the behavior block
+     * @brief Adds a link to the behavior
      */
     void AddLink(const Link &link);
 
     /**
-     * @brief Adds an operation to the behavior block
+     * @brief Adds an operation to the behavior
      */
     void AddOperation(const Operation &op);
 
     /**
-     * @brief Adds a local parameter to the behavior block
+     * @brief Adds a local parameter to the behavior
      */
     void AddLocalParameter(const Parameter &param);
 
     /**
-     * @brief Adds a shared parameter to the behavior block
+     * @brief Adds a shared parameter to the behavior
      */
     void AddSharedParameter(const Parameter &param);
 
     /**
-     * @brief Adds a comment to the behavior block
+     * @brief Adds a comment to the behavior
      */
     void AddComment(const Comment &comment);
 
@@ -1030,11 +1007,6 @@ struct BehaviorBlock : InterfaceElement {
     Comment *FindComment(CK_ID commentId);
 
     /**
-     * @brief Gets the bounding rectangle for the entire block
-     */
-    Rect GetBoundingRect() const;
-
-    /**
      * @brief Finds elements at the given position
      * @param position The position to check
      * @param tolerance Distance tolerance for considering an element hit
@@ -1043,7 +1015,7 @@ struct BehaviorBlock : InterfaceElement {
     std::vector<InterfaceElement *> FindElementsAt(const Point &position, float tolerance = 5.0f);
 
     /**
-     * @brief Resets all data in the behavior block
+     * @brief Resets all data in the behavior
      */
     void Reset();
 
@@ -1073,11 +1045,11 @@ public:
     //------------------------------------------------------
     // Core data
     //------------------------------------------------------
-    CKDWORD version = 0x16;                    ///< Interface chunk version
-    StartPoint start;                          ///< Start point of the script
-    BehaviorBlock scriptRoot;                  ///< Root behavior block
-    int behaviorBlockCount = 0;                ///< Number of behavior blocks
-    std::vector<BehaviorBlock> behaviorBlocks; ///< Behavior blocks in the tree
+    CKDWORD version = 0x16;          ///< Interface chunk version
+    StartPoint start;                ///< Start point of the script
+    BehaviorData scriptRoot;             ///< Root behavior
+    std::vector<BehaviorData> behaviors; ///< Behavior in the tree
+    int behaviorCount = 0;           ///< Number of behaviors
 
     // Extra data section
     int extraDataVersion = 0;         ///< Version of extra data
@@ -1092,22 +1064,22 @@ public:
     //------------------------------------------------------
 
     /**
-     * @brief Adds a behavior block to the interface
+     * @brief Adds a behavior to the interface
      */
-    void AddBehaviorBlock(BehaviorBlock &block);
+    void AddBehavior(BehaviorData &behavior);
 
     /**
-     * @brief Removes a behavior block from the interface
-     * @param blockId ID of the block to remove
+     * @brief Removes a behavior from the interface
+     * @param behaviorId ID of the behavior to remove
      * @return true if block was removed, false otherwise
      */
-    bool RemoveBehaviorBlock(CK_ID blockId);
+    bool RemoveBehavior(CK_ID behaviorId);
 
     /**
-     * @brief Finds a behavior block by ID
-     * @return Pointer to the behavior block if found, nullptr otherwise
+     * @brief Finds a behavior by ID
+     * @return Pointer to the behavior if found, nullptr otherwise
      */
-    BehaviorBlock *FindBehaviorBlock(CK_ID id);
+    BehaviorData *FindBehavior(CK_ID id);
 
     /**
      * @brief Adds extra data to the interface
@@ -1171,25 +1143,25 @@ public:
     std::vector<Link *> FindLinksConnectedTo(CK_ID objId);
 
     /**
-     * @brief Gets a sub-tree below a behavior block
+     * @brief Gets a sub-tree below a behavior
      * @param rootId ID of the root block for the sub-tree
      * @return Vector of pointers to blocks in the sub-tree
      */
-    std::vector<BehaviorBlock *> GetSubTree(CK_ID rootId);
+    std::vector<BehaviorData *> GetSubTree(CK_ID rootId);
 
     /**
      * @brief Finds the parent block of a given block
-     * @param blockId ID of the block to find the parent for
+     * @param behaviorId ID of the block to find the parent for
      * @return Pointer to the parent block or nullptr if not found
      */
-    BehaviorBlock *FindParentBlock(CK_ID blockId);
+    BehaviorData *FindParentBehavior(CK_ID behaviorId);
 
     /**
      * @brief Finds all child blocks of a given block
-     * @param blockId ID of the block to find children for
+     * @param behaviorId ID of the block to find children for
      * @return Vector of pointers to child blocks
      */
-    std::vector<BehaviorBlock *> FindChildBlocks(CK_ID blockId);
+    std::vector<BehaviorData *> FindChildBehaviors(CK_ID behaviorId);
 
     /**
      * @brief Checks if there's a path between two blocks
@@ -1206,48 +1178,6 @@ public:
      * @return Vector of block IDs in the path, empty if no path exists
      */
     std::vector<CK_ID> FindPath(CK_ID startId, CK_ID endId);
-
-    /**
-     * @brief Creates a dependency graph of the behavior blocks
-     * @return Map of block IDs to vectors of dependent block IDs
-     */
-    std::map<CK_ID, std::vector<CK_ID>> CreateDependencyGraph();
-
-    //------------------------------------------------------
-    // Validation and Integrity
-    //------------------------------------------------------
-
-    /**
-     * @brief Validates the interface data for consistency
-     * @param errors Output vector to store error messages
-     * @return true if valid, false if there are errors
-     */
-    bool Validate(std::vector<std::string> &errors);
-
-    /**
-     * @brief Repairs common issues in the interface data
-     * @return Number of issues fixed
-     */
-    int Repair();
-
-    //------------------------------------------------------
-    // Transformation and Manipulation
-    //------------------------------------------------------
-
-    /**
-     * @brief Offsets all elements in the interface by the given amount
-     */
-    void Offset(float h, float v);
-
-    /**
-     * @brief Scales all elements in the interface by the given factor
-     */
-    void Scale(float factor);
-
-    /**
-     * @brief Gets the bounding rectangle of the entire interface
-     */
-    Rect GetBoundingRect() const;
 
     //------------------------------------------------------
     // Serialization Methods
@@ -1281,51 +1211,51 @@ private:
         CKDWORD flags = 0;
         CKDWORD version = 0x16;
         CKDWORD scriptIndex = 0;
-        CKDWORD blockIndex = 0;
+        CKDWORD behaviorIndex = 0;
     };
 
     /**
-     * @brief Loads a behavior block header from a chunk
+     * @brief Loads a behavior header from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      * @return TRUE if successful, FALSE otherwise
      */
-    CKBOOL LoadBlockHeader(SerializationContext &context, BehaviorBlock &block);
+    CKBOOL LoadBehaviorHeader(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads links from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      */
-    void LoadBlockLinks(SerializationContext &context, BehaviorBlock &block);
+    void LoadBehaviorLinks(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads operations from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      */
-    void LoadBlockOperations(SerializationContext &context, BehaviorBlock &block);
+    void LoadBehaviorOperations(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads comments from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      */
-    void LoadBlockComments(SerializationContext &context, BehaviorBlock &block);
+    void LoadBehaviorComments(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads parameters from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      */
-    void LoadBlockParameters(SerializationContext &context, BehaviorBlock &block);
+    void LoadBehaviorParameters(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads graph information from a chunk
      * @param context Serialization context
-     * @param block The behavior block to populate
+     * @param block The behavior to populate
      */
-    void LoadBlockGraph(SerializationContext &context, BehaviorBlock &block);
+    void LoadBehaviorGraph(SerializationContext &context, BehaviorData &block);
 
     /**
      * @brief Loads extra information from a chunk
@@ -1334,41 +1264,41 @@ private:
     void LoadExtraData(SerializationContext &context);
 
     /**
-     * @brief Saves a behavior block header to a chunk
+     * @brief Saves a behavior header to a chunk
      * @param context Serialization context
      * @return TRUE if successful, FALSE otherwise
      */
-    CKBOOL SaveBlockHeader(SerializationContext &context);
+    CKBOOL SaveBehaviorHeader(SerializationContext &context);
 
     /**
      * @brief Saves links to a chunk
      * @param context Serialization context
      */
-    void SaveBlockLinks(SerializationContext &context);
+    void SaveBehaviorLinks(SerializationContext &context);
 
     /**
      * @brief Saves operations to a chunk
      * @param context Serialization context
      */
-    void SaveBlockOperations(SerializationContext &context);
+    void SaveBehaviorOperations(SerializationContext &context);
 
     /**
      * @brief Saves comments to a chunk
      * @param context Serialization context
      */
-    void SaveBlockComments(SerializationContext &context);
+    void SaveBehaviorComments(SerializationContext &context);
 
     /**
      * @brief Saves parameters to a chunk
      * @param context Serialization context
      */
-    void SaveBlockParameters(SerializationContext &context);
+    void SaveBehaviorParameters(SerializationContext &context);
 
     /**
      * @brief Saves graph information to a chunk
      * @param context Serialization context
      */
-    void SaveBlockGraph(SerializationContext &context);
+    void SaveBehaviorGraph(SerializationContext &context);
 
     /**
      * @brief Saves extra information to a chunk
@@ -1377,18 +1307,18 @@ private:
     void SaveExtraData(SerializationContext &context);
 
     /**
-     * @brief Gets the appropriate behavior block based on the context
+     * @brief Gets the appropriate behavior based on the context
      * @param context Serialization context
-     * @return Reference to the behavior block
+     * @return Reference to the behavior
      */
-    const BehaviorBlock &GetBehaviorBlockForContext(const SerializationContext &context) const;
+    const BehaviorData &GetBehaviorForContext(const SerializationContext &context) const;
 
     /**
-     * @brief Gets a modifiable reference to the appropriate behavior block based on the context
+     * @brief Gets a modifiable reference to the appropriate behavior based on the context
      * @param context Serialization context
-     * @return Reference to the behavior block
+     * @return Reference to the behavior
      */
-    BehaviorBlock &GetBehaviorBlockForContext(SerializationContext &context);
+    BehaviorData &GetBehaviorForContext(SerializationContext &context);
 };
 
 /**

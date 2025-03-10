@@ -14,8 +14,6 @@ GraphBuilder::GraphBuilder(InterfaceData &target_data, CKContext *context)
 void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     // Initialize data structures
     m_Data.Clear();
-    m_Data.behaviorBlockCount = 0;
-    m_Data.behaviorBlocks.clear();
     m_BehaviorMap.clear();
     m_OperationMap.clear();
     m_InputParamSet.clear();
@@ -36,20 +34,20 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
         const int depth = currentPair.second;
         behaviorQueue.pop();
 
-        // Create a new behavior block if not the root
-        BehaviorBlock *currentBlock = nullptr;
+        // Create a new behavior data if not the root
+        BehaviorData *currentBehaviorData = nullptr;
         if (depth == 0) {
-            currentBlock = &m_Data.scriptRoot;
+            currentBehaviorData = &m_Data.scriptRoot;
         } else {
-            m_Data.behaviorBlocks.emplace_back();
-            currentBlock = &m_Data.behaviorBlocks.back();
-            m_Data.behaviorBlockCount++;
+            m_Data.behaviors.emplace_back();
+            currentBehaviorData = &m_Data.behaviors.back();
+            m_Data.behaviorCount++;
         }
 
         // Store behavior ID and mapping
         CK_ID behaviorId = currentBehavior->GetID();
         m_BehaviorIds.push_back(behaviorId);
-        m_BehaviorMap[behaviorId] = depth > 0 ? m_Data.behaviorBlocks.size() - 1 : -1;
+        m_BehaviorMap[behaviorId] = depth > 0 ? m_Data.behaviors.size() - 1 : -1;
 
         // Map operation IDs to indices
         const int operationCount = currentBehavior->GetParameterOperationCount();
@@ -57,11 +55,11 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
             CKParameterOperation *operation = currentBehavior->GetParameterOperation(i);
             CK_ID operationId = operation->GetID();
             m_OperationIds.push_back(operationId);
-            m_OperationMap[operationId] = std::make_pair(depth > 0 ? m_Data.behaviorBlocks.size() - 1 : -1, i);
+            m_OperationMap[operationId] = std::make_pair(depth > 0 ? m_Data.behaviors.size() - 1 : -1, i);
         }
 
-        // Decorate the behavior block
-        DecorateBehavior(*currentBlock, currentBehavior, depth);
+        // Decorate the behavior
+        DecorateBehavior(*currentBehaviorData, currentBehavior, depth);
 
         // Enqueue sub-behaviors for processing
         const int subBehaviorCount = currentBehavior->GetSubBehaviorCount();
@@ -77,9 +75,9 @@ void GraphBuilder::BuildGraph(CKBehavior *rootBehavior) {
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorBlock &GraphBuilder::GetBehaviorBlock(CK_ID id) {
+BehaviorData &GraphBuilder::GetBehavior(CK_ID id) {
     int index = m_BehaviorMap[id];
-    return (index >= 0) ? m_Data.behaviorBlocks[index] : m_Data.scriptRoot;
+    return (index >= 0) ? m_Data.behaviors[index] : m_Data.scriptRoot;
 }
 
 Operation &GraphBuilder::GetOperation(CK_ID id) {
@@ -87,17 +85,17 @@ Operation &GraphBuilder::GetOperation(CK_ID id) {
     int bbIndex = opInfo.first;
     int opIndex = opInfo.second;
 
-    BehaviorBlock *block = nullptr;
+    BehaviorData *behavior = nullptr;
     if (bbIndex >= 0) {
-        if (bbIndex < static_cast<int>(m_Data.behaviorBlocks.size())) {
-            block = &m_Data.behaviorBlocks[bbIndex];
+        if (bbIndex < static_cast<int>(m_Data.behaviors.size())) {
+            behavior = &m_Data.behaviors[bbIndex];
         }
     } else {
-        block = &m_Data.scriptRoot;
+        behavior = &m_Data.scriptRoot;
     }
 
-    if (block && opIndex >= 0 && opIndex < block->operationCount) {
-        return block->operations[opIndex];
+    if (behavior && opIndex >= 0 && opIndex < behavior->operationCount) {
+        return behavior->operations[opIndex];
     }
 
     // If not found, log and throw
@@ -110,13 +108,13 @@ bool GraphBuilder::IsOperation(CK_ID id) const {
     return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
 }
 
-void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *behavior, int depth) {
-    behaviorBlock.id = behavior->GetID();
-    behaviorBlock.folded = depth > 0;
-    behaviorBlock.depth = depth;
-    behaviorBlock.isBehaviorGraph = behavior->GetType() != CKBEHAVIORTYPE_BASE;
+void GraphBuilder::DecorateBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth) {
+    behaviorData.id = behavior->GetID();
+    behaviorData.folded = depth > 0;
+    behaviorData.depth = depth;
+    behaviorData.isBehaviorGraph = behavior->GetType() != CKBEHAVIORTYPE_BASE;
 
-    CalculateBehaviorSize(behaviorBlock, behavior);
+    CalculateBehaviorSize(behaviorData, behavior);
 
     // Track input parameters
     for (int i = 0, count = behavior->GetInputParameterCount(); i < count; ++i) {
@@ -169,7 +167,7 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
     }
 
     // Process behavior links if this is a behavior graph
-    if (behaviorBlock.isBehaviorGraph) {
+    if (behaviorData.isBehaviorGraph) {
         // Add behavior links
         for (int i = 0, count = behavior->GetSubBehaviorLinkCount(); i < count; ++i) {
             CKBehaviorLink *behaviorLink = behavior->GetSubBehaviorLink(i);
@@ -207,7 +205,7 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
                 link.end.type = ENDPOINT_BOUT; // Output
             }
 
-            behaviorBlock.AddLink(link);
+            behaviorData.AddLink(link);
         }
 
         // Add operations
@@ -215,7 +213,7 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
             CKParameterOperation *operation = behavior->GetParameterOperation(i);
             Operation operationData;
             operationData.id = operation->GetID();
-            behaviorBlock.AddOperation(operationData);
+            behaviorData.AddOperation(operationData);
         }
 
         // Add local parameters
@@ -224,13 +222,13 @@ void GraphBuilder::DecorateBehavior(BehaviorBlock &behaviorBlock, CKBehavior *be
             Parameter paramData;
             paramData.id = localParam->GetID();
             paramData.style = PARAM_STYLE_CLOSED;
-            behaviorBlock.AddLocalParameter(paramData);
+            behaviorData.AddLocalParameter(paramData);
         }
     }
 }
 
-void GraphBuilder::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavior *behavior) {
-    if (behaviorBlock.depth > 0) {
+void GraphBuilder::CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior *behavior) {
+    if (behaviorData.depth > 0) {
         // Calculate height based on max of inputs and outputs
         int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
         if (height < 1) {
@@ -250,13 +248,13 @@ void GraphBuilder::CalculateBehaviorSize(BehaviorBlock &behaviorBlock, CKBehavio
         }
 
         // Set size
-        behaviorBlock.size.hSize = static_cast<float>(width) * 20.0f;
-        behaviorBlock.size.vSize = static_cast<float>(height) * 20.0f;
+        behaviorData.size.hSize = static_cast<float>(width) * 20.0f;
+        behaviorData.size.vSize = static_cast<float>(height) * 20.0f;
 
         // Set expanded size for behavior graphs
-        if (behaviorBlock.isBehaviorGraph) {
-            behaviorBlock.hExpandSize = behaviorBlock.size.hSize * 10.0f;
-            behaviorBlock.vExpandSize = behaviorBlock.size.vSize * 10.0f;
+        if (behaviorData.isBehaviorGraph) {
+            behaviorData.hExpandSize = behaviorData.size.hSize * 10.0f;
+            behaviorData.vExpandSize = behaviorData.size.vSize * 10.0f;
         }
     }
 }
@@ -381,11 +379,11 @@ CKBehavior *GraphBuilder::GetParameterOwnerBehavior(CKParameter *parameter) {
 
 GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID behaviorId, CK_ID sourceId) {
     // Check if shortcut already exists
-    BehaviorBlock &behaviorBlock = GetBehaviorBlock(behaviorId);
+    BehaviorData &behavior = GetBehavior(behaviorId);
 
     // Check if shortcut already exists
-    for (int i = 0; i < behaviorBlock.sharedParamCount; ++i) {
-        if (behaviorBlock.sharedParams[i].sourceId == sourceId) {
+    for (int i = 0; i < behavior.sharedParamCount; ++i) {
+        if (behavior.sharedParams[i].sourceId == sourceId) {
             return {behaviorId, i, behaviorId};
         }
     }
@@ -396,9 +394,9 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     paramData.hPos = paramData.vPos = 0;
     paramData.id = sourceId;
     paramData.style = PARAM_STYLE_CLOSED;
-    behaviorBlock.AddSharedParameter(paramData);
+    behavior.AddSharedParameter(paramData);
 
-    return {behaviorId, behaviorBlock.sharedParamCount - 1, behaviorId};
+    return {behaviorId, behavior.sharedParamCount - 1, behaviorId};
 }
 
 void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
@@ -438,7 +436,7 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
                 link.end = lastEndpoint;
                 lastEndpoint = link.start;
 
-                GetBehaviorBlock(currentBehavior->GetID()).AddLink(link);
+                GetBehavior(currentBehavior->GetID()).AddLink(link);
                 currentBehavior = currentBehavior->GetParent();
             }
         } catch (const std::exception &e) {
@@ -474,7 +472,7 @@ void GraphBuilder::ConfigureParameterLinks(CKBehavior *root) {
                 link.start = lastEndpoint;
                 lastEndpoint = link.end;
 
-                GetBehaviorBlock(currentBehavior->GetID()).AddLink(link);
+                GetBehavior(currentBehavior->GetID()).AddLink(link);
                 currentBehavior = currentBehavior->GetParent();
             }
         } catch (const std::exception &e) {
@@ -532,7 +530,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(
                                 inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                             };
 
-                            GetBehaviorBlock(inputPos.behaviorId).AddLink(link);
+                            GetBehavior(inputPos.behaviorId).AddLink(link);
                             connected = true;
                             break;
                         }
@@ -552,7 +550,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(
                         position.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                     };
 
-                    GetBehaviorBlock(position.behaviorId).AddLink(link);
+                    GetBehavior(position.behaviorId).AddLink(link);
                 }
             } else if (inputParam->GetSharedSource()) {
                 // Shared source connection
@@ -581,7 +579,7 @@ void GraphBuilder::ConfigureDirectParameterConnections(
                                 inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                             };
 
-                            GetBehaviorBlock(inputPos.behaviorId).AddLink(link);
+                            GetBehavior(inputPos.behaviorId).AddLink(link);
                             connected = true;
                             break;
                         }

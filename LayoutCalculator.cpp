@@ -26,71 +26,59 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     m_Edges.clear();
     m_MovedOperations.clear();
 
-    // Calculate layout for each behavior block in the order they were inserted
+    // Calculate layout for each behavior in the order they were inserted
     for (auto &behaviorId : behaviorIds) {
-        BehaviorBlock &behaviorBlock = GetBehaviorBlock(behaviorId);
-        if (behaviorBlock.isBehaviorGraph) {
+        BehaviorData &behavior = GetBehavior(behaviorId);
+        if (behavior.isBehaviorGraph) {
             CalculateBehaviorPositions(
-                behaviorBlock,
-                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
-                behaviorBlock.depth == 0
+                behavior,
+                (CKBehavior *) m_Context->GetObject(behavior.id),
+                behavior.depth == 0
             );
         }
     }
 
     // Calculate visual properties in the same order
     for (auto &behaviorId : behaviorIds) {
-        BehaviorBlock &behaviorBlock = GetBehaviorBlock(behaviorId);
-        if (behaviorBlock.isBehaviorGraph) {
+        BehaviorData &behavior = GetBehavior(behaviorId);
+        if (behavior.isBehaviorGraph) {
             // Apply multiple passes of operation positioning
             for (int i = 0; i < MAX_FIX_STACK_OPS; ++i) {
-                CalculateOperationPositions(
-                    behaviorBlock,
-                    (CKBehavior *) m_Context->GetObject(behaviorBlock.id)
-                );
+                CalculateOperationPositions(behavior);
             }
 
             // Calculate parameter positions
-            CalculateLocalParameterPositions(
-                behaviorBlock,
-                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
-                false
-            );
-
-            CalculateLocalParameterPositions(
-                behaviorBlock,
-                (CKBehavior *) m_Context->GetObject(behaviorBlock.id),
-                true
-            );
+            CalculateLocalParameterPositions(behavior, false);
+            CalculateLocalParameterPositions(behavior, true);
         }
     }
 
-    // Calculate the height of the behavior block
-    float blockHeight = std::max(m_RequiredSize[script->GetID()].vSize + 4 * 20.0f, 200.0f);
-    float startVertical = blockHeight / 2.0f;
+    // Calculate the height of the behavior
+    float behaviorHeight = std::max(m_RequiredSize[script->GetID()].vSize + 4 * 20.0f, 200.0f);
+    float startVertical = behaviorHeight / 2.0f;
 
     // Set start information and recalculate positions
-    DecorateStart(m_Data.scriptRoot, startVertical, blockHeight);
+    DecorateStart(m_Data.scriptRoot, startVertical, behaviorHeight);
     RecalculateAbsolutePositions(m_Data.scriptRoot, script, 0.0f, 0.0f);
 
     m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorBlock &LayoutCalculator::GetBehaviorBlock(CK_ID id) {
+BehaviorData &LayoutCalculator::GetBehavior(CK_ID id) {
     // Check if the ID is the script root
     if (m_Data.scriptRoot.id == id) {
         return m_Data.scriptRoot;
     }
 
-    // Search for the block in the behavior blocks
-    for (auto &block : m_Data.behaviorBlocks) {
-        if (block.id == id) {
-            return block;
+    // Search for the behavior in the behaviors
+    for (auto &behavior : m_Data.behaviors) {
+        if (behavior.id == id) {
+            return behavior;
         }
     }
 
     // If not found, throw an exception
-    throw std::runtime_error("Behavior block not found with ID: " + std::to_string(id));
+    throw std::runtime_error("Behavior not found with ID: " + std::to_string(id));
 }
 
 Operation &LayoutCalculator::GetOperation(CK_ID id) {
@@ -101,9 +89,9 @@ Operation &LayoutCalculator::GetOperation(CK_ID id) {
         }
     }
 
-    // Check all behavior blocks
-    for (auto &block : m_Data.behaviorBlocks) {
-        for (auto &op : block.operations) {
+    // Check all behaviors
+    for (auto &behavior : m_Data.behaviors) {
+        for (auto &op : behavior.operations) {
             if (op.id == id) {
                 return op;
             }
@@ -125,9 +113,9 @@ std::vector<CK_ID> LayoutCalculator::GetBehaviorIds() const {
     // Add script root
     behaviorIds.push_back(m_Data.scriptRoot.id);
 
-    // Add all behavior blocks
-    for (const auto &block : m_Data.behaviorBlocks) {
-        behaviorIds.push_back(block.id);
+    // Add all behaviors
+    for (const auto &behavior : m_Data.behaviors) {
+        behaviorIds.push_back(behavior.id);
     }
 
     return behaviorIds;
@@ -141,9 +129,9 @@ std::vector<CK_ID> LayoutCalculator::GetOperationIds() const {
         operationIds.push_back(op.id);
     }
 
-    // Add all behavior block operations
-    for (const auto &block : m_Data.behaviorBlocks) {
-        for (const auto &op : block.operations) {
+    // Add all behavior operations
+    for (const auto &behavior : m_Data.behaviors) {
+        for (const auto &op : behavior.operations) {
             operationIds.push_back(op.id);
         }
     }
@@ -161,7 +149,7 @@ void LayoutCalculator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
     m_Edges.push_back(edge);
 }
 
-void LayoutCalculator::ConstructGraph(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
+void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *behavior) {
     // Clear existing graph data
     m_Vertices.clear();
     m_VertexIds.clear();
@@ -224,7 +212,7 @@ void LayoutCalculator::CalculateDistancesFromQueue(std::queue<CK_ID> &nodeQueue)
     }
 }
 
-void LayoutCalculator::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
+void LayoutCalculator::CalculateGraphDistances(BehaviorData &behaviorGraph) {
     m_DistanceFromRoot.clear();
     m_DistanceIds.clear();
     m_PredecessorEdge.clear();
@@ -246,9 +234,9 @@ void LayoutCalculator::CalculateGraphDistances(BehaviorBlock &behaviorGraph) {
     }
 }
 
-Rect LayoutCalculator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool isRoot) {
-    CK_ID currentId = behaviorBlock.id;
-    Rect size = behaviorBlock.size;
+Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behavior, bool isRoot) {
+    CK_ID currentId = behavior.id;
+    Rect size = behavior.size;
 
     // Reset size for root node
     if (isRoot) {
@@ -269,7 +257,7 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool 
         // Only consider nodes that are direct children in the shortest path tree
         if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() &&
             m_PredecessorEdge[targetId] == edgeIndex) {
-            Rect childSize = CalculateSubgraphSize(GetBehaviorBlock(targetId), false);
+            Rect childSize = CalculateSubgraphSize(GetBehavior(targetId), false);
             totalVerticalSize += childSize.vSize + 20.0f * 2;
             maxHorizontalSize = std::max(maxHorizontalSize, childSize.hSize);
             childCount++;
@@ -286,23 +274,23 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorBlock &behaviorBlock, bool 
     size.hSize = size.hSize + (maxHorizontalSize > 0.0f ? maxHorizontalSize + 20.0f * 2 : 0.0f);
 
     // Store required size and return
-    m_RequiredSize[behaviorBlock.id] = size;
-    m_SizeIds.push_back(behaviorBlock.id);
+    m_RequiredSize[behavior.id] = size;
+    m_SizeIds.push_back(behavior.id);
     return size;
 }
 
-void LayoutCalculator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float horizontalPos, float verticalPos,
+void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behavior, float horizontalPos, float verticalPos,
                                             bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
-        behaviorBlock.size.hPos = horizontalPos;
-        behaviorBlock.size.vPos = verticalPos + (m_RequiredSize[behaviorBlock.id].vSize - behaviorBlock.size.vSize) / 2;
+        behavior.size.hPos = horizontalPos;
+        behavior.size.vPos = verticalPos + (m_RequiredSize[behavior.id].vSize - behavior.size.vSize) / 2;
     }
 
     // Position all children
     int childCount = 0;
     float currentVerticalOffset = 0;
-    CK_ID currentId = behaviorBlock.id;
+    CK_ID currentId = behavior.id;
 
     for (int edgeIndex = m_Vertices[currentId].firstEdgeIndex;
          edgeIndex != -1;
@@ -314,8 +302,8 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float
             m_PredecessorEdge[targetId] == edgeIndex) {
             Rect childSize = m_RequiredSize[targetId];
             PlaceBehaviorInParent(
-                GetBehaviorBlock(targetId),
-                horizontalPos + (isRoot ? 20.0f : behaviorBlock.size.hSize + 20.0f * 2),
+                GetBehavior(targetId),
+                horizontalPos + (isRoot ? 20.0f : behavior.size.hSize + 20.0f * 2),
                 verticalPos + currentVerticalOffset,
                 false
             );
@@ -330,7 +318,7 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorBlock &behaviorBlock, float
     }
 }
 
-float LayoutCalculator::CalculateBehaviorPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior, bool isScript) {
+float LayoutCalculator::CalculateBehaviorPositions(BehaviorData &behaviorGraph, CKBehavior *behavior, bool isScript) {
     // Build the graph representation
     ConstructGraph(behaviorGraph, behavior);
 
@@ -376,9 +364,9 @@ Point LayoutCalculator::GetInterfaceInputPosition(CK_ID targetId, int inputIndex
         position.v = roundf(operation.vPos / 20.0f);
     } else {
         // Handle behavior
-        BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
-        float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
-        float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
+        BehaviorData &behavior = GetBehavior(targetId);
+        float horizontalPos = roundf(behavior.size.hPos / 20.0f);
+        float verticalPos = roundf(behavior.size.vPos / 20.0f);
         position.h = horizontalPos + static_cast<float>(inputIndex);
         position.v = verticalPos - 1.0f;
     }
@@ -396,17 +384,17 @@ Point LayoutCalculator::GetInterfaceOutputPosition(CK_ID targetId, int outputInd
         position.v = roundf(operation.vPos / 20.0f) + 2;
     } else {
         // Handle behavior
-        BehaviorBlock &behaviorBlock = GetBehaviorBlock(targetId);
-        float horizontalPos = roundf(behaviorBlock.size.hPos / 20.0f);
-        float verticalPos = roundf(behaviorBlock.size.vPos / 20.0f);
+        BehaviorData &behavior = GetBehavior(targetId);
+        float horizontalPos = roundf(behavior.size.hPos / 20.0f);
+        float verticalPos = roundf(behavior.size.vPos / 20.0f);
         position.h = horizontalPos + static_cast<float>(outputIndex);
-        position.v = verticalPos + roundf(behaviorBlock.size.vSize / 20.0f) + 1;
+        position.v = verticalPos + roundf(behavior.size.vSize / 20.0f) + 1;
     }
 
     return position;
 }
 
-void LayoutCalculator::CalculateOperationPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior) {
+void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) {
     // Position operations based on their parameter links
     for (auto &paramLink : behaviorGraph.links) {
         if (paramLink.type == LINK_TYPE_PARAMETER) {
@@ -436,8 +424,7 @@ void LayoutCalculator::CalculateOperationPositions(BehaviorBlock &behaviorGraph,
     }
 }
 
-void LayoutCalculator::CalculateLocalParameterPositions(BehaviorBlock &behaviorGraph, CKBehavior *behavior,
-                                                       bool isInputDirection) {
+void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGraph, bool isInputDirection) {
     for (auto &paramLink : behaviorGraph.links) {
         if (paramLink.type == LINK_TYPE_PARAMETER) {
             // Parameter link
@@ -485,36 +472,36 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorBlock &behaviorG
     }
 }
 
-void LayoutCalculator::DecorateStart(BehaviorBlock &script, float verticalStartPos, float verticalSize) {
+void LayoutCalculator::DecorateStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
     m_Data.start.id = script.id;
     m_Data.start.vSize = verticalSize;
     m_Data.start.vStartPos = verticalStartPos;
     m_Data.start.vStart = 0;
 }
 
-void LayoutCalculator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock, CKBehavior *behavior,
+void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior,
                                                    float startHorizontal, float startVertical) {
     // Reset position for root behavior
-    if (behaviorBlock.depth == 0) {
-        behaviorBlock.size.hPos = 0;
-        behaviorBlock.size.vPos = 0;
+    if (behaviorData.depth == 0) {
+        behaviorData.size.hPos = 0;
+        behaviorData.size.vPos = 0;
     }
 
     // Apply offset
-    behaviorBlock.size.hPos += startHorizontal;
-    behaviorBlock.size.vPos += startVertical;
+    behaviorData.size.hPos += startHorizontal;
+    behaviorData.size.vPos += startVertical;
 
     // Process sub-behaviors and operations if this is a behavior graph
-    if (behaviorBlock.isBehaviorGraph) {
+    if (behaviorData.isBehaviorGraph) {
         // Process sub-behaviors
         const int subBehaviorCount = behavior->GetSubBehaviorCount();
         for (int i = 0; i < subBehaviorCount; ++i) {
             CKBehavior *subBehavior = behavior->GetSubBehavior(i);
             RecalculateAbsolutePositions(
-                GetBehaviorBlock(subBehavior->GetID()),
+                GetBehavior(subBehavior->GetID()),
                 subBehavior,
-                behaviorBlock.size.hPos,
-                behaviorBlock.size.vPos
+                behaviorData.size.hPos,
+                behaviorData.size.vPos
             );
         }
 
@@ -522,8 +509,8 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorBlock &behaviorBlock
         const int operationCount = behavior->GetParameterOperationCount();
         for (int i = 0; i < operationCount; ++i) {
             Operation &operation = GetOperation(behavior->GetParameterOperation(i)->GetID());
-            operation.hPos += behaviorBlock.size.hPos;
-            operation.vPos += behaviorBlock.size.vPos;
+            operation.hPos += behaviorData.size.hPos;
+            operation.vPos += behaviorData.size.vPos;
         }
     }
 }
