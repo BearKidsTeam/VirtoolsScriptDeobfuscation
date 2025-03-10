@@ -270,25 +270,22 @@ bool LinkEndpoint::IsCompatibleWith(const LinkEndpoint &other) const {
 // Link implementations
 void Link::AddControlPoint(const Point &point) {
     points.push_back(point);
-    pointCount = static_cast<int>(points.size());
 }
 
 void Link::InsertControlPoint(int index, const Point &point) {
-    if (index >= 0 && index <= pointCount) {
+    if (index >= 0 && index <= points.size()) {
         points.insert(points.begin() + index, point);
-        pointCount = static_cast<int>(points.size());
     }
 }
 
 void Link::RemoveControlPoint(int index) {
-    if (index >= 0 && index < pointCount) {
+    if (index >= 0 && index < points.size()) {
         points.erase(points.begin() + index);
-        pointCount = static_cast<int>(points.size());
     }
 }
 
 void Link::UpdateControlPoint(int index, const Point &point) {
-    if (index >= 0 && index < pointCount) {
+    if (index >= 0 && index < points.size()) {
         points[index] = point;
     }
 }
@@ -1174,7 +1171,6 @@ void InterfaceData::LoadBehaviorLinks(SerializationContext &context, BehaviorDat
 
         // Read control points
         const int pointCount = chunk->ReadInt();
-        link.pointCount = pointCount;
         link.points.resize(pointCount);
 
         for (int j = 0; j < pointCount; ++j) {

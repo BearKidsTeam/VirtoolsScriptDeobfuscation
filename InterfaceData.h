@@ -413,7 +413,6 @@ struct LinkEndpoint : InterfaceElement {
 struct Link : InterfaceElement {
     LinkType type = static_cast<LinkType>(0); ///< Type of the link
     LinkEndpoint start;                       ///< Starting endpoint
-    int pointCount = 0;                       ///< Number of control points
     std::vector<Point> points;                ///< Control points for link routing
     LinkEndpoint end;                         ///< Ending endpoint
 
