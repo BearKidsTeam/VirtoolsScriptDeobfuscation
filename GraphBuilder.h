@@ -58,12 +58,8 @@ private:
     // Sets to track parameters (for fast lookup)
     std::unordered_set<CK_ID> m_InputParamSet;  // Input parameter IDs
     std::unordered_set<CK_ID> m_OutputParamSet; // Output parameter IDs
-
-    // Vectors to maintain insertion order
-    std::vector<CK_ID> m_BehaviorIds;
-    std::vector<CK_ID> m_OperationIds;
-    std::vector<CK_ID> m_InputParamIds;
-    std::vector<CK_ID> m_OutputParamIds;
+    std::vector<CK_ID> m_InputParams;
+    std::vector<CK_ID> m_OutputParams;
 
     /**
      * Gets a behavior block by ID
