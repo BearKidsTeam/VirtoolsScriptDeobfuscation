@@ -1,5 +1,6 @@
 #include "LayoutCalculator.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "CKAll.h"
@@ -161,25 +162,77 @@ void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *b
         m_Vertices[subBehavior->GetID()] = Vertex();
     }
 
-    // Add edges from behavior links (in reverse order)
-    for (auto it = behaviorGraph.links.rbegin(); it != behaviorGraph.links.rend(); ++it) {
-        Link &link = *it;
+    // Collect behavior links
+    std::vector<Link *> behaviorLinks;
+    for (auto &link : behaviorGraph.links) {
         if (link.IsBehaviorLink()) {
-            // Behavior link
-            AddGraphEdge(link.start.id, link.end.id);
+            behaviorLinks.push_back(&link);
         }
     }
 
+    // Sort behavior links based on input/output positions of connected behaviors
+    std::sort(behaviorLinks.begin(), behaviorLinks.end(),
+              [](const Link *a, const Link *b) {
+                  // Primary sort by output position (link.start)
+                  if (a->start.index != b->start.index) {
+                      return a->start.index > b->start.index;
+                  }
+
+                  // Secondary sort by input position (link.end)
+                  if (a->end.index != b->end.index) {
+                      return a->end.index > b->end.index;
+                  }
+
+                  // If both positions match, use IDs for stable sorting
+                  return a->id > b->id;
+              });
+
+    // Add edges from behavior links sorted by input/output positions
+    for (Link *link : behaviorLinks) {
+        AddGraphEdge(link->start.id, link->end.id);
+    }
+
+
     // Connect unconnected nodes to ensure a connected graph
-    CK_ID currentSourceId = behavior->GetID();
-    // Iterate through vertices in insertion order
+    CK_ID sourceId = behavior->GetID();
+
+    // Order behaviors by their inputs positions (typically top-to-bottom)
+    std::vector<std::pair<CK_ID, int>> behaviorsByInputs;
     for (const auto &vertex : m_Vertices) {
         CK_ID vertexId = vertex.first;
-        // If node has no incoming edges and isn't the root, create a virtual edge
-        if (vertexId != behavior->GetID() && m_Vertices[vertexId].incomingEdgeCount == 0) {
+        if (vertexId != behavior->GetID()) {
+            // Find the first/top input position of this behavior
+            int minInputPos = INT_MAX;
+            for (auto &link : behaviorGraph.links) {
+                if (link.IsBehaviorLink() && link.end.id == vertexId) {
+                    minInputPos = std::min(minInputPos, link.end.index);
+                }
+            }
+
+            // If no links found, use a default based on vertical position
+            if (minInputPos == INT_MAX) {
+                const BehaviorData &behData = GetBehaviorData(vertexId);
+                minInputPos = static_cast<int>(behData.rect.vPos / 20.0f);
+            }
+
+            behaviorsByInputs.emplace_back(vertexId, minInputPos);
+        }
+    }
+
+    // Sort by input position
+    std::sort(behaviorsByInputs.begin(), behaviorsByInputs.end(),
+              [](const std::pair<CK_ID, int> &a, const std::pair<CK_ID, int> &b) {
+                  return a.second > b.second;
+              });
+
+    // Connect unconnected nodes in input position order
+    for (const auto &entry : behaviorsByInputs) {
+        CK_ID vertexId = entry.first;
+        // If node has no incoming edges, create a virtual edge
+        if (m_Vertices[vertexId].incomingEdgeCount == 0) {
             // Add a virtual edge and make them a chain
-            AddGraphEdge(currentSourceId, vertexId);
-            currentSourceId = vertexId;
+            AddGraphEdge(sourceId, vertexId);
+            sourceId = vertexId;
         }
     }
 }
