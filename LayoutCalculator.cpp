@@ -12,18 +12,38 @@ LayoutCalculator::LayoutCalculator(InterfaceData &targetData, CKContext *context
     : m_Data(targetData), m_Context(context) {}
 
 void LayoutCalculator::CalculateLayout(CKBehavior *script) {
-    // Get ordered behavior IDs
+    // Get ordered behavior IDs for consistent processing
     const auto behaviorIds = GetBehaviorIds();
 
-    // Clear data structures to ensure consistent ordering
+    // Clear graph state
+    InitializeGraphState();
+
+    // Phase 1: Calculate behavior positions
+    CalculateBehaviorLayouts(behaviorIds, script);
+
+    // Phase 2: Calculate operation and parameter positions
+    CalculateElementPositions(behaviorIds);
+
+    // Phase 3: Finalize script layout and recalculate absolute positions
+    FinalizeScriptLayout(script);
+
+    // Phase 4: Calculate link routes
+    CalculateAllLinkRoutes();
+
+    // Notify observers of changes
+    m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
+}
+
+void LayoutCalculator::InitializeGraphState() {
     m_Vertices.clear();
     m_DistanceFromRoot.clear();
     m_RequiredSize.clear();
     m_PredecessorEdge.clear();
     m_Edges.clear();
     m_MovedOperations.clear();
+}
 
-    // Calculate layout for each behavior in the order they were inserted
+void LayoutCalculator::CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds, CKBehavior *script) {
     for (auto &behaviorId : behaviorIds) {
         BehaviorData *behaviorData = GetBehaviorData(behaviorId);
         if (behaviorData && behaviorData->isBehaviorGraph) {
@@ -34,8 +54,9 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
             );
         }
     }
+}
 
-    // Calculate visual properties in the same order
+void LayoutCalculator::CalculateElementPositions(const std::vector<CK_ID> &behaviorIds) {
     for (auto &behaviorId : behaviorIds) {
         BehaviorData *behaviorData = GetBehaviorData(behaviorId);
         if (behaviorData && behaviorData->isBehaviorGraph) {
@@ -45,81 +66,58 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
             }
 
             // Calculate parameter positions
-            CalculateLocalParameterPositions(*behaviorData, false);
-            CalculateLocalParameterPositions(*behaviorData, true);
+            CalculateLocalParameterPositions(*behaviorData, false); // Outputs
+            CalculateLocalParameterPositions(*behaviorData, true);  // Inputs
         }
     }
+}
 
-    // Calculate the height of the behavior
-    float behaviorHeight = std::max(m_RequiredSize[script->GetID()].vSize + 4 * 20.0f, 200.0f);
+void LayoutCalculator::FinalizeScriptLayout(CKBehavior *script) {
+    // Calculate the total height of the behavior graph
+    Rect& requiredSize = m_RequiredSize[script->GetID()];
+
+    // Ensure we have a valid size
+    if (requiredSize.vSize <= 0) {
+        // Calculate fallback size based on behavior count
+        float totalHeight = 0;
+        for (const auto& behavior : m_Data.behaviors) {
+            totalHeight += behavior.rect.vSize + VERTICAL_SPACING;
+        }
+        requiredSize.vSize = std::max(totalHeight, VERTICAL_SPACING * 5.0f);
+    }
+
+    float behaviorHeight = requiredSize.vSize + EXPANSION_PADDING * VERTICAL_SPACING;
+
+    // Calculate the vertical center position for the start point
     float startVertical = behaviorHeight / 2.0f;
 
     // Set start information and recalculate positions
     SetStart(m_Data.rootBehavior, startVertical, behaviorHeight);
     RecalculateAbsolutePositions(m_Data.rootBehavior, script, 0.0f, 0.0f);
-
-    m_Data.NotifyObservers(nullptr, InterfaceData::ElementAction::Modified);
 }
 
-BehaviorData *LayoutCalculator::GetBehaviorData(CK_ID id) const {
-    if (m_Data.rootBehavior.id == id) {
-        return &m_Data.rootBehavior;
-    }
-
+void LayoutCalculator::CalculateAllLinkRoutes() {
     for (auto &behavior : m_Data.behaviors) {
-        if (behavior.id == id) {
-            return &behavior;
-        }
+        CalculateLinkRoutes(behavior);
     }
+    CalculateLinkRoutes(m_Data.rootBehavior);
+}
 
-    return nullptr;
+//------------------------------------------------------
+// Utility Methods
+//------------------------------------------------------
+
+BehaviorData *LayoutCalculator::GetBehaviorData(CK_ID id) const {
+    return m_Data.FindBehavior(id);
 }
 
 Operation *LayoutCalculator::GetOperation(CK_ID id) const {
-    // Check root behavior operations
-    for (auto &op : m_Data.rootBehavior.operations) {
-        if (op.id == id) {
-            return &op;
-        }
-    }
-
-    // Check all other behaviors
-    for (auto &behavior : m_Data.behaviors) {
-        for (auto &op : behavior.operations) {
-            if (op.id == id) {
-                return &op;
-            }
-        }
-    }
-
-    return nullptr;
+    return m_Data.FindOperation(id);
 }
 
 bool LayoutCalculator::IsOperation(CK_ID id) const {
     CKObject *obj = m_Context->GetObject(id);
     return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
-}
-
-
-Parameter *LayoutCalculator::GetParameter(CK_ID behaviorId, int index, bool isLocal) const {
-    BehaviorData *behaviorData = GetBehaviorData(behaviorId);
-    if (!behaviorData) return nullptr;
-
-    if (isLocal) {
-        if (index >= 0 && index < behaviorData->localParams.size()) {
-            return &behaviorData->localParams[index];
-        }
-    } else {
-        if (index >= 0 && index < behaviorData->sharedParams.size()) {
-            return &behaviorData->sharedParams[index];
-        }
-    }
-
-    return nullptr;
-}
-
-Parameter *LayoutCalculator::GetSharedParameter(CK_ID behaviorId, int index) const {
-    return GetParameter(behaviorId, index, false);
 }
 
 std::vector<CK_ID> LayoutCalculator::GetBehaviorIds() const {
@@ -155,24 +153,44 @@ std::vector<CK_ID> LayoutCalculator::GetOperationIds() const {
     return operationIds;
 }
 
-void LayoutCalculator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
-    Edge edge = {};
-    edge.sourceId = sourceId;
-    edge.targetId = targetId;
-    edge.nextEdgeIndex = m_Vertices[sourceId].firstEdgeIndex;
-    m_Vertices[sourceId].firstEdgeIndex = m_Edges.size();
-    m_Vertices[targetId].incomingEdgeCount++;
-    m_Edges.push_back(edge);
-}
+//------------------------------------------------------
+// Graph Construction and Analysis
+//------------------------------------------------------
 
 void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *behavior) {
     // Initialize graph structures
     m_Vertices.clear();
     m_Edges.clear();
 
-    const CK_ID rootId = behavior->GetID();
+    // Create vertices for root and all sub-behaviors
+    CreateGraphVertices(behaviorGraph, behavior);
 
+    // Get sub-behavior count
+    const int subBehaviorCount = behavior->GetSubBehaviorCount();
+    if (subBehaviorCount == 0) {
+        return; // No sub-behaviors to connect
+    }
+
+    // Get valid behavior links
+    std::vector<Link *> validBehaviorLinks = GetValidBehaviorLinks(behaviorGraph);
+
+    // Handle the case where no valid links exist
+    if (validBehaviorLinks.empty()) {
+        ConnectDisconnectedBehaviorsToRoot(behavior);
+        return;
+    }
+
+    // Sort and add links to the graph
+    SortBehaviorLinks(validBehaviorLinks);
+    AddBehaviorLinksToGraph(validBehaviorLinks);
+
+    // Connect any orphaned behaviors
+    ConnectOrphanedBehaviors(behaviorGraph, behavior->GetID());
+}
+
+void LayoutCalculator::CreateGraphVertices(BehaviorData &behaviorGraph, CKBehavior *behavior) {
     // Create root vertex
+    const CK_ID rootId = behavior->GetID();
     m_Vertices[rootId] = Vertex();
 
     // Create vertices for all sub-behaviors
@@ -183,40 +201,38 @@ void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *b
             m_Vertices[subBehavior->GetID()] = Vertex();
         }
     }
+}
 
-    // Skip further processing if no sub-behaviors exist
-    if (subBehaviorCount == 0) {
-        return;
-    }
+std::vector<Link *> LayoutCalculator::GetValidBehaviorLinks(BehaviorData &behaviorGraph) {
+    std::vector<Link *> validLinks;
 
-    // Collect and filter valid behavior links
-    std::vector<Link *> behaviorLinks;
     for (auto &link : behaviorGraph.links) {
         if (link.IsBehaviorLink()) {
             // Only include links between known behaviors
             if (m_Vertices.find(link.start.id) != m_Vertices.end() &&
                 m_Vertices.find(link.end.id) != m_Vertices.end()) {
-                behaviorLinks.push_back(&link);
+                validLinks.push_back(&link);
             }
         }
     }
 
-    // Handle the case where no valid links exist
-    if (behaviorLinks.empty()) {
-        ConnectDisconnectedBehaviorsToRoot(behavior);
-        return;
-    }
+    return validLinks;
+}
 
-    // Sort links in proper order for left-to-right layout
-    SortBehaviorLinks(behaviorLinks);
-
-    // Add edges to graph in sorted order
+void LayoutCalculator::AddBehaviorLinksToGraph(const std::vector<Link *> &behaviorLinks) {
     for (Link *link : behaviorLinks) {
         AddGraphEdge(link->start.id, link->end.id);
     }
+}
 
-    // Connect any remaining unconnected behaviors
-    ConnectOrphanedBehaviors(behaviorGraph, rootId);
+void LayoutCalculator::AddGraphEdge(CK_ID sourceId, CK_ID targetId) {
+    Edge edge = {};
+    edge.sourceId = sourceId;
+    edge.targetId = targetId;
+    edge.nextEdgeIndex = m_Vertices[sourceId].firstEdgeIndex;
+    m_Vertices[sourceId].firstEdgeIndex = m_Edges.size();
+    m_Vertices[targetId].incomingEdgeCount++;
+    m_Edges.push_back(edge);
 }
 
 void LayoutCalculator::SortBehaviorLinks(std::vector<Link *> &behaviorLinks) {
@@ -269,13 +285,17 @@ void LayoutCalculator::ConnectDisconnectedBehaviorsToRoot(CKBehavior *behavior) 
 
 void LayoutCalculator::ConnectOrphanedBehaviors(BehaviorData &behaviorGraph, CK_ID rootId) {
     // Find behaviors without incoming edges and connect them
+    std::vector<OrphanedBehavior> orphanedBehaviors = FindOrphanedBehaviors(behaviorGraph, rootId);
 
-    // Create a list of orphaned behaviors with their display position
-    struct OrphanedBehavior {
-        CK_ID id;
-        float verticalPosition;
-    };
+    // Sort orphaned behaviors by vertical position (descending)
+    SortOrphanedBehaviors(orphanedBehaviors);
 
+    // Connect orphaned behaviors to form a chain
+    ConnectOrphanedBehaviorsChain(orphanedBehaviors, rootId);
+}
+
+std::vector<LayoutCalculator::OrphanedBehavior> LayoutCalculator::FindOrphanedBehaviors(
+    BehaviorData &behaviorGraph, CK_ID rootId) {
     std::vector<OrphanedBehavior> orphanedBehaviors;
 
     for (const auto &vertexPair : m_Vertices) {
@@ -284,37 +304,36 @@ void LayoutCalculator::ConnectOrphanedBehaviors(BehaviorData &behaviorGraph, CK_
 
         // Skip root and behaviors with incoming edges
         if (behaviorId != rootId && vertex.incomingEdgeCount == 0) {
-            float vPos = 0.0f;
-
-            // Find the behavior data to get vertical position
-            BehaviorData *behaviorData = nullptr;
-            if (behaviorId == behaviorGraph.id) {
-                behaviorData = &behaviorGraph;
-            } else {
-                for (auto &behavior : m_Data.behaviors) {
-                    if (behavior.id == behaviorId) {
-                        behaviorData = &behavior;
-                        break;
-                    }
-                }
-            }
-
-            // Get vertical position if behavior data was found
-            if (behaviorData) {
-                vPos = behaviorData->rect.vPos;
-            }
-
+            float vPos = GetBehaviorVerticalPosition(behaviorGraph, behaviorId);
             orphanedBehaviors.push_back({behaviorId, vPos});
         }
     }
 
-    // Sort orphaned behaviors by vertical position (descending)
+    return orphanedBehaviors;
+}
+
+float LayoutCalculator::GetBehaviorVerticalPosition(BehaviorData &behaviorGraph, CK_ID behaviorId) {
+    // Find the behavior data to get vertical position
+    BehaviorData *behaviorData = nullptr;
+    if (behaviorId == behaviorGraph.id) {
+        behaviorData = &behaviorGraph;
+    } else {
+        behaviorData = GetBehaviorData(behaviorId);
+    }
+
+    // Return vertical position if behavior data was found
+    return behaviorData ? behaviorData->rect.vPos : 0.0f;
+}
+
+void LayoutCalculator::SortOrphanedBehaviors(std::vector<OrphanedBehavior> &orphanedBehaviors) {
     std::sort(orphanedBehaviors.begin(), orphanedBehaviors.end(),
               [](const OrphanedBehavior &a, const OrphanedBehavior &b) {
                   return a.verticalPosition > b.verticalPosition;
               });
+}
 
-    // Connect orphaned behaviors to form a chain
+void LayoutCalculator::ConnectOrphanedBehaviorsChain(
+    const std::vector<OrphanedBehavior> &orphanedBehaviors, CK_ID rootId) {
     CK_ID sourceId = rootId;
     for (const auto &orphan : orphanedBehaviors) {
         AddGraphEdge(sourceId, orphan.id);
@@ -355,13 +374,17 @@ void LayoutCalculator::CalculateGraphDistances(BehaviorData &behaviorGraph) {
     CalculateDistancesFromQueue(nodeQueue);
 
     // Check for disconnected components (rare case)
-    for (const auto &vertex : m_Vertices) {
-        CK_ID vertexId = vertex.first;
-        if (m_DistanceFromRoot.find(vertexId) == m_DistanceFromRoot.end()) {
-            // Node not reachable - ignored as it should be handled by virtual edges
-        }
-    }
+    // for (const auto &vertex : m_Vertices) {
+    //     CK_ID vertexId = vertex.first;
+    //     if (m_DistanceFromRoot.find(vertexId) == m_DistanceFromRoot.end()) {
+    //         // Node not reachable - ignored as it should be handled by virtual edges
+    //     }
+    // }
 }
+
+//------------------------------------------------------
+// Size and Position Calculation
+//------------------------------------------------------
 
 Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool isRoot) {
     CK_ID currentId = behaviorData.id;
@@ -386,9 +409,10 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool is
         if (!targetData) continue;
 
         // Only consider nodes that are direct children in the shortest path tree
-        if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() && m_PredecessorEdge[targetId] == edgeIndex) {
+        if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() &&
+            m_PredecessorEdge[targetId] == edgeIndex) {
             Rect childSize = CalculateSubgraphSize(*targetData, false);
-            totalVerticalSize += childSize.vSize + 20.0f * 2;
+            totalVerticalSize += childSize.vSize + VERTICAL_SPACING * 2;
             maxHorizontalSize = std::max(maxHorizontalSize, childSize.hSize);
             childCount++;
         }
@@ -396,12 +420,12 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool is
 
     // Adjust vertical size (remove extra padding if multiple children)
     if (childCount > 0) {
-        totalVerticalSize -= 20.0f * 2;
+        totalVerticalSize -= VERTICAL_SPACING * 2;
     }
 
     // Calculate final size
+    size.hSize = size.hSize + (maxHorizontalSize > 0.0f ? maxHorizontalSize + HORIZONTAL_SPACING * 2 : 0.0f);
     size.vSize = std::max(size.vSize, totalVerticalSize);
-    size.hSize = size.hSize + (maxHorizontalSize > 0.0f ? maxHorizontalSize + 20.0f * 2 : 0.0f);
 
     // Store required size and return
     m_RequiredSize[behaviorData.id] = size;
@@ -413,7 +437,9 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
     // Position the behavior (unless it's the root)
     if (!isRoot) {
         behaviorData.rect.hPos = horizontalPos;
-        behaviorData.rect.vPos = verticalPos + (m_RequiredSize[behaviorData.id].vSize - behaviorData.rect.vSize) / 2;
+        // Center the behavior vertically within its allocated space
+        float verticalCenter = (m_RequiredSize[behaviorData.id].vSize - behaviorData.rect.vSize) / 2;
+        behaviorData.rect.vPos = verticalPos + verticalCenter;
     }
 
     // Position all children
@@ -432,20 +458,27 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
         if (m_PredecessorEdge.find(targetId) != m_PredecessorEdge.end() &&
             m_PredecessorEdge[targetId] == edgeIndex) {
             const Rect &childSize = m_RequiredSize[targetId];
+
+            // Calculate horizontal position based on parent type
+            float childHorizontalPos;
+            if (isRoot) {
+                childHorizontalPos = horizontalPos + HORIZONTAL_SPACING;
+            } else {
+                childHorizontalPos = horizontalPos + behaviorData.rect.hSize + HORIZONTAL_SPACING * BEHAVIOR_PADDING;
+            }
+
+            // Place the child behavior
             PlaceBehaviorInParent(
                 *targetData,
-                horizontalPos + (isRoot ? 20.0f : behaviorData.rect.hSize + 20.0f * 2),
+                childHorizontalPos,
                 verticalPos + currentVerticalOffset,
                 false
             );
-            currentVerticalOffset += childSize.vSize + 20.0f * 2;
+
+            // Update vertical offset for next child
+            currentVerticalOffset += childSize.vSize + VERTICAL_SPACING * BEHAVIOR_PADDING;
             childCount++;
         }
-    }
-
-    // Adjust final vertical size
-    if (childCount > 0) {
-        currentVerticalOffset -= 20.0f * 2;
     }
 }
 
@@ -460,166 +493,23 @@ float LayoutCalculator::CalculateBehaviorPositions(BehaviorData &behaviorGraph, 
     const Rect size = CalculateSubgraphSize(behaviorGraph, true);
 
     // Calculate expanded sizes
-    behaviorGraph.hExpandSize = size.hSize + 20.0f * 4;
-    behaviorGraph.vExpandSize = size.vSize + 20.0f * 4;
+    behaviorGraph.hExpandSize = size.hSize + HORIZONTAL_SPACING * EXPANSION_PADDING;
+    behaviorGraph.vExpandSize = size.vSize + VERTICAL_SPACING * EXPANSION_PADDING;
 
     // Place behaviors within the graph
+    float horizontalOffset = isScript
+                                 ? HORIZONTAL_SPACING * BEHAVIOR_H_START_OFFSET
+                                 : HORIZONTAL_SPACING * BEHAVIOR_PADDING;
+
     PlaceBehaviorInParent(
         behaviorGraph,
-        (isScript ? 140.0f : 0.0f) + 20.0f * 2,
-        20.0f * 2,
+        horizontalOffset,
+        VERTICAL_SPACING * BEHAVIOR_V_START_OFFSET,
         true
     );
 
     // Return vertical center position
     return size.vSize / 2;
-}
-
-void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, const Point &position) {
-    parameter.hPos = static_cast<int>(roundf(position.h));
-    parameter.vPos = static_cast<int>(roundf(position.v));
-}
-
-void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point &position) {
-    operation.hPos = (position.h - 1) * 20;
-    operation.vPos = (position.v - 2) * 20;
-}
-
-Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
-    Point position;
-
-    // Handle operation
-    if (IsOperation(targetId)) {
-        Operation *operation = GetOperation(targetId);
-        if (operation) {
-            position.h = roundf(operation->hPos / 20.0f) + inputIndex * 2;
-            position.v = roundf(operation->vPos / 20.0f);
-        }
-    } else {
-        // Handle behavior
-        BehaviorData *behaviorData = GetBehaviorData(targetId);
-        if (behaviorData) {
-            float horizontalPos = roundf(behaviorData->rect.hPos / 20.0f);
-            float verticalPos = roundf(behaviorData->rect.vPos / 20.0f);
-            position.h = horizontalPos + static_cast<float>(inputIndex);
-            position.v = verticalPos - 1.0f;
-        }
-    }
-
-    return position;
-}
-
-Point LayoutCalculator::GetOutputParamPosition(CK_ID targetId, int outputIndex) {
-    Point position;
-
-    // Handle operation
-    if (IsOperation(targetId)) {
-        Operation *operation = GetOperation(targetId);
-        if (operation) {
-            position.h = roundf(operation->hPos / 20.0f) + 1;
-            position.v = roundf(operation->vPos / 20.0f) + 2;
-        }
-    } else {
-        // Handle behavior
-        BehaviorData *behaviorData = GetBehaviorData(targetId);
-        if (behaviorData) {
-            float horizontalPos = roundf(behaviorData->rect.hPos / 20.0f);
-            float verticalPos = roundf(behaviorData->rect.vPos / 20.0f);
-            position.h = horizontalPos + static_cast<float>(outputIndex);
-            position.v = verticalPos + roundf(behaviorData->rect.vSize / 20.0f) + 1;
-        }
-    }
-
-    return position;
-}
-
-void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) {
-    // Position operations based on their parameter links
-    for (auto &paramLink : behaviorGraph.links) {
-        if (paramLink.type != LINK_TYPE_PARAMETER)
-            continue;
-
-        // Parameter link
-        if (paramLink.start.type == ENDPOINT_POUT && IsOperation(paramLink.start.id)) {
-            // Skip if already moved
-            if (m_MovedOperations.find(paramLink.start.id) != m_MovedOperations.end()) {
-                continue;
-            }
-
-            Operation *startOperation = GetOperation(paramLink.start.id);
-            if (!startOperation) {
-                continue;
-            }
-
-            // Position based on destination
-            if (paramLink.end.type == ENDPOINT_PIN) {
-                // Normal input
-                MoveOperationToPosition(*startOperation,
-                                        GetInputParamPosition(paramLink.end.id, paramLink.end.index));
-                m_MovedOperations.insert(paramLink.start.id);
-            } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
-                // Target input
-                MoveOperationToPosition(*startOperation,
-                                        GetInputParamPosition(paramLink.end.id, -1));
-                m_MovedOperations.insert(paramLink.start.id);
-            }
-        }
-    }
-}
-
-void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGraph, bool isInputDirection) {
-    for (auto &paramLink : behaviorGraph.links) {
-        if (paramLink.type != LINK_TYPE_PARAMETER)
-            continue;
-
-        // Parameter link
-        if (isInputDirection) {
-            // Position source parameters (inputs)
-            Parameter *startParam = nullptr;
-
-            if (paramLink.start.type == ENDPOINT_PLOCAL) {
-                // Local parameter
-                startParam = &behaviorGraph.localParams[paramLink.start.index];
-            } else if (paramLink.start.type == ENDPOINT_POUT_SHORTCUT) {
-                // Shared parameter
-                startParam = &behaviorGraph.sharedParams[paramLink.start.index];
-            }
-
-            if (startParam) {
-                if (paramLink.end.type == ENDPOINT_PIN) {
-                    // Normal input
-                    MoveParameterToPosition(*startParam, GetInputParamPosition(paramLink.end.id, paramLink.end.index));
-                } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
-                    // Target input
-                    MoveParameterToPosition(*startParam, GetInputParamPosition(paramLink.end.id, -1));
-                }
-            }
-        } else {
-            // Position destination parameters (outputs)
-            Parameter *endParam = nullptr;
-
-            if (paramLink.end.type == ENDPOINT_PLOCAL) {
-                // Local parameter
-                endParam = &behaviorGraph.localParams[paramLink.end.index];
-            }
-
-            if (endParam) {
-                if (paramLink.start.type == ENDPOINT_POUT) {
-                    // From output
-                    MoveParameterToPosition(*endParam,
-                                            GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
-                }
-            }
-        }
-    }
-}
-
-void LayoutCalculator::SetStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
-    auto &header = m_Data.header;
-    header.id = script.id;
-    header.vSize = verticalSize;
-    header.vStartPos = verticalStartPos;
-    header.vStart = 0;
 }
 
 void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior,
@@ -650,16 +540,824 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
         }
 
         // Process operations
-        const int operationCount = behavior->GetParameterOperationCount();
-        for (int i = 0; i < operationCount; ++i) {
-            CKParameterOperation *operation = behavior->GetParameterOperation(i);
-            if (operation) {
-                Operation *operationData = GetOperation(operation->GetID());
-                if (operationData) {
-                    operationData->hPos += behaviorData.rect.hPos;
-                    operationData->vPos += behaviorData.rect.vPos;
+        for (auto &op : behaviorData.operations) {
+            op.hPos += behaviorData.rect.hPos;
+            op.vPos += behaviorData.rect.vPos;
+        }
+    }
+}
+
+void LayoutCalculator::SetStart(BehaviorData &script, float verticalStartPos, float verticalSize) {
+    auto &header = m_Data.header;
+    header.id = script.id;
+    header.vSize = verticalSize;
+    header.vStartPos = verticalStartPos;
+    header.vStart = 0;
+}
+
+//------------------------------------------------------
+// Operation and Parameter Layout
+//------------------------------------------------------
+
+void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, const Point &position) {
+    // Ensure position is valid (not NaN or infinity)
+    if (std::isfinite(position.h) && std::isfinite(position.v)) {
+        parameter.hPos = static_cast<int>(roundf(position.h));
+        parameter.vPos = static_cast<int>(roundf(position.v));
+    } else {
+        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Invalid parameter position (%f, %f)", position.h, position.v);
+    }
+}
+
+void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point &position) {
+    operation.hPos = (position.h - OPERATION_H_OFFSET) * HORIZONTAL_SPACING;
+    operation.vPos = (position.v - OPERATION_V_OFFSET) * VERTICAL_SPACING;
+}
+
+Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
+    Point position;
+
+    // Handle operation
+    if (IsOperation(targetId)) {
+        Operation *operation = GetOperation(targetId);
+        if (operation) {
+            position.h = roundf(operation->hPos / HORIZONTAL_SPACING) + inputIndex * 2;
+            position.v = roundf(operation->vPos / VERTICAL_SPACING);
+        }
+    } else {
+        // Handle behavior
+        BehaviorData *behaviorData = GetBehaviorData(targetId);
+        if (behaviorData) {
+            float horizontalPos = roundf(behaviorData->rect.hPos / HORIZONTAL_SPACING);
+            float verticalPos = roundf(behaviorData->rect.vPos / VERTICAL_SPACING);
+            position.h = horizontalPos + static_cast<float>(inputIndex);
+            position.v = verticalPos - 1.0f;
+        }
+    }
+
+    return position;
+}
+
+Point LayoutCalculator::GetOutputParamPosition(CK_ID targetId, int outputIndex) {
+    Point position;
+
+    // Handle operation
+    if (IsOperation(targetId)) {
+        Operation *operation = GetOperation(targetId);
+        if (operation) {
+            position.h = roundf(operation->hPos / HORIZONTAL_SPACING) + 1;
+            position.v = roundf(operation->vPos / VERTICAL_SPACING) + 2;
+        }
+    } else {
+        // Handle behavior
+        BehaviorData *behaviorData = GetBehaviorData(targetId);
+        if (behaviorData) {
+            float horizontalPos = roundf(behaviorData->rect.hPos / HORIZONTAL_SPACING);
+            float verticalPos = roundf(behaviorData->rect.vPos / VERTICAL_SPACING);
+            position.h = horizontalPos + static_cast<float>(outputIndex);
+            position.v = verticalPos + roundf(behaviorData->rect.vSize / VERTICAL_SPACING) + 1;
+        }
+    }
+
+    return position;
+}
+
+void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) {
+    // Position operations based on their parameter links
+    for (auto &paramLink : behaviorGraph.links) {
+        if (paramLink.type != LINK_TYPE_PARAMETER)
+            continue;
+
+        // Parameter link
+        if (paramLink.start.type == ENDPOINT_POUT && IsOperation(paramLink.start.id)) {
+            // Skip if already moved
+            if (m_MovedOperations.find(paramLink.start.id) != m_MovedOperations.end()) {
+                continue;
+            }
+
+            Operation *startOperation = GetOperation(paramLink.start.id);
+            if (!startOperation) {
+                continue;
+            }
+
+            // Position based on destination
+            if (paramLink.end.type == ENDPOINT_PIN) {
+                // Ensure destination exists before getting position
+                BehaviorData *behaviorData = GetBehaviorData(paramLink.end.id);
+                if (behaviorData || IsOperation(paramLink.end.id)) {
+                    // Normal input
+                    MoveOperationToPosition(*startOperation,
+                                          GetInputParamPosition(paramLink.end.id, paramLink.end.index));
+                    m_MovedOperations.insert(paramLink.start.id);
+                }
+            } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
+                // Ensure destination exists before getting position
+                BehaviorData *behaviorData = GetBehaviorData(paramLink.end.id);
+                if (behaviorData) {
+                    // Target input
+                    MoveOperationToPosition(*startOperation,
+                                          GetInputParamPosition(paramLink.end.id, -1));
+                    m_MovedOperations.insert(paramLink.start.id);
                 }
             }
         }
     }
+}
+
+void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGraph, bool isInputDirection) {
+    // Maintain a set of parameters we've already positioned to avoid overwrites
+    std::unordered_set<Parameter*> processedParams;
+
+    for (auto &paramLink : behaviorGraph.links) {
+        if (paramLink.type != LINK_TYPE_PARAMETER)
+            continue;
+
+        // Parameter link
+        if (isInputDirection) {
+            // Position source parameters (inputs)
+            Parameter *startParam = nullptr;
+
+            if (paramLink.start.type == ENDPOINT_PLOCAL) {
+                // Local parameter
+                if (paramLink.start.index >= 0 && paramLink.start.index < static_cast<int>(behaviorGraph.localParams.size())) {
+                    startParam = &behaviorGraph.localParams[paramLink.start.index];
+                }
+            } else if (paramLink.start.type == ENDPOINT_POUT_SHORTCUT) {
+                // Shared parameter
+                if (paramLink.start.index >= 0 && paramLink.start.index < static_cast<int>(behaviorGraph.sharedParams.size())) {
+                    startParam = &behaviorGraph.sharedParams[paramLink.start.index];
+                }
+            }
+
+            if (startParam && processedParams.find(startParam) == processedParams.end()) {
+                if (paramLink.end.type == ENDPOINT_PIN) {
+                    // Normal input
+                    MoveParameterToPosition(*startParam, GetInputParamPosition(paramLink.end.id, paramLink.end.index));
+                    processedParams.insert(startParam);
+                } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
+                    // Target input
+                    MoveParameterToPosition(*startParam, GetInputParamPosition(paramLink.end.id, -1));
+                    processedParams.insert(startParam);
+                }
+            }
+        } else {
+            // Position destination parameters (outputs)
+            Parameter *endParam = nullptr;
+
+            if (paramLink.end.type == ENDPOINT_PLOCAL) {
+                // Local parameter
+                if (paramLink.end.index >= 0 && paramLink.end.index < static_cast<int>(behaviorGraph.localParams.size())) {
+                    endParam = &behaviorGraph.localParams[paramLink.end.index];
+                }
+            }
+
+            if (endParam && processedParams.find(endParam) == processedParams.end()) {
+                if (paramLink.start.type == ENDPOINT_POUT) {
+                    // From output
+                    MoveParameterToPosition(*endParam, GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
+                    processedParams.insert(endParam);
+                }
+            }
+        }
+    }
+}
+
+void LayoutCalculator::CalculateLinkRoutes(BehaviorData &behaviorData) {
+    // Process each link in the behavior
+    for (auto &link : behaviorData.links) {
+        RouteLink(link);
+    }
+}
+
+void LayoutCalculator::RouteLink(Link &link) {
+    // Get endpoint positions
+    const Point startPos = GetEndpointPosition(link.start);
+    const Point endPos = GetEndpointPosition(link.end);
+
+    // Create a path connecting the points - exclude start and end positions
+    link.points = CreatePath(startPos, endPos, link);
+}
+
+LayoutCalculator::LinkCharacteristics LayoutCalculator::DetermineRoutingCharacteristics(const Link &link) {
+    LinkCharacteristics result;
+
+    // Determine link type
+    if (link.IsBehaviorLink()) {
+        result.linkType = LinkType::BehaviorFlow;
+    } else if (link.IsParameterOpLink()) {
+        result.linkType = LinkType::ParameterOperation;
+    } else {
+        result.linkType = LinkType::ParameterData;
+    }
+
+    // Check if this is a self-connection
+    result.isSelfConnection = (link.start.id == link.end.id);
+
+    // Check if this is a start link
+    result.isStartLink = link.start.IsStartBehaviorInput();
+
+    // Determine endpoint types
+    result.isSourceBehaviorOutput = link.start.IsBehaviorOutput();
+    result.isSourceParameterOutput = link.start.IsParameterOutput();
+    result.isTargetBehaviorInput = link.end.IsBehaviorInput();
+    result.isTargetParameterInput = link.end.IsParameterInput();
+
+    // Check for operation involvement
+    result.isSourceOperation = IsOperation(link.start.id);
+    result.isTargetOperation = IsOperation(link.end.id);
+
+    // Check for parameter shortcuts
+    result.isParameterShortcut = (link.start.type == ENDPOINT_POUT_SHORTCUT);
+
+    return result;
+}
+
+Point LayoutCalculator::GetEndpointPosition(const LinkEndpoint &endpoint) {
+    // Handle different endpoint types based on their category
+    if (endpoint.IsParameterInput()) {
+        return GetParameterInputPosition(endpoint);
+    } else if (endpoint.IsParameterOutput()) {
+        return GetParameterOutputPosition(endpoint);
+    } else if (endpoint.IsParameterLocal()) {
+        return GetLocalParameterPosition(endpoint);
+    } else if (endpoint.IsBehaviorInput()) {
+        return GetBehaviorInputPosition(endpoint);
+    } else if (endpoint.IsBehaviorOutput()) {
+        return GetBehaviorOutputPosition(endpoint);
+    }
+
+    // Unknown endpoint type - use default position
+    m_Context->OutputToConsoleEx((CKSTRING) "Warning: Unknown endpoint type %d", endpoint.type);
+    return {};
+}
+
+Point LayoutCalculator::GetParameterInputPosition(const LinkEndpoint &endpoint) {
+    Point position;
+
+    if (endpoint.type == ENDPOINT_TARGET_PIN) {
+        // Target parameter is special
+        BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+        if (!behaviorData) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Left side, middle of the block
+        position.h = behaviorData->rect.hPos;
+        position.v = behaviorData->rect.vPos;
+    } else if (IsOperation(endpoint.id)) {
+        // Parameter input on operation
+        Operation *operation = GetOperation(endpoint.id);
+        if (!operation) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation with ID %d not found", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Position based on input index
+        position.h = operation->hPos;
+        position.v = operation->vPos;
+
+        if (endpoint.index == 0) {
+            // First input is on left side
+            position.h -= GRID_HALF_CELL;
+        } else if (endpoint.index == 1) {
+            // Second input is on right side
+            position.h += GRID_HALF_CELL;
+        }
+    } else {
+        // Parameter input on behavior
+        BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+        if (!behaviorData) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        float offset = (behaviorData->isUsingTarget) ? HORIZONTAL_SPACING : GRID_HALF_CELL;
+        position.h = behaviorData->rect.hPos + offset + HORIZONTAL_SPACING * endpoint.index;
+        position.v = behaviorData->rect.vPos;
+    }
+
+    return position;
+}
+
+Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint) {
+    Point position;
+
+    if (endpoint.type == ENDPOINT_POUT_SHORTCUT) {
+        // Parameter output shortcut
+        BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+        if (!behaviorData) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Validate index is within bounds
+        if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->sharedParams.size())) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Parameter shortcut index %d out of bounds (size %d)",
+                endpoint.index, behaviorData->sharedParams.size());
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Get the parameter
+        Parameter &param = behaviorData->sharedParams[endpoint.index];
+
+        // Get position based on actual parameter position
+        position.h = static_cast<float>(param.hPos);
+        position.v = static_cast<float>(param.vPos);
+
+        // Parameter shortcuts often have a visual indicator - adjust position based on parameter style
+        if (param.ShowsName()) {
+            // If name is shown, adjust to right edge of the name display
+            position.h += GRID_HALF_CELL;
+        }
+    } else if (IsOperation(endpoint.id)) {
+        // Parameter output on operation
+        Operation *operation = GetOperation(endpoint.id);
+        if (!operation) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation with ID %d not found", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Operation outputs come from the bottom
+        position.h = operation->hPos; // Center of the operation
+        position.v = operation->vPos + PARAMETER_LINK_VERTICAL_OFFSET; // Below the operation
+    } else {
+        // Parameter output on behavior
+        BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+        if (!behaviorData) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        float offset = (behaviorData->isUsingTarget) ? HORIZONTAL_SPACING : GRID_HALF_CELL;
+        position.h = behaviorData->rect.hPos + offset + HORIZONTAL_SPACING * endpoint.index;
+        position.v = behaviorData->rect.vPos + behaviorData->rect.vSize;
+    }
+
+    return position;
+}
+
+Point LayoutCalculator::GetLocalParameterPosition(const LinkEndpoint &endpoint) {
+    Point position;
+
+    BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+    if (!behaviorData) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+        return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+    }
+
+    // Validate parameter index
+    if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->localParams.size())) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Error: Local parameter index %d out of bounds (size %d)",
+            endpoint.index, behaviorData->localParams.size());
+        return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+    }
+
+    // Get exact parameter position
+    const Parameter &param = behaviorData->localParams[endpoint.index];
+    position.h = static_cast<float>(param.hPos);
+    position.v = static_cast<float>(param.vPos);
+
+    // Parameters should have non-zero positions once layout is calculated
+    if (position.h == 0.0f && position.v == 0.0f) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Local parameter has zero position");
+        // Calculate a reasonable position within behavior's area
+        position.h = behaviorData->rect.hPos + behaviorData->rect.hSize / 2.0f;
+        position.v = behaviorData->rect.vPos + behaviorData->rect.vSize / 2.0f;
+    }
+
+    return position;
+}
+
+Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
+    Point position;
+
+    if (endpoint.IsStartBehaviorInput()) {
+        // Start behavior input is special - comes from script header
+        position.h = m_Data.header.hStartPos;
+        position.v = m_Data.header.vStartPos;
+    } else {
+        CKObject *object = m_Context->GetObject(endpoint.id);
+        if (!object) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior input", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING}; // Safe fallback position
+        }
+
+        // Regular behavior input
+        BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+        if (!behaviorData) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        }
+
+        // Validate input index - behaviors can have variable numbers of inputs
+        CKBehavior *behavior = (CKBehavior *) object;
+        int inputCount = behavior->GetInputCount();
+        if (endpoint.index < 0 || endpoint.index >= inputCount) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior input index %d out of bounds (max %d)",
+                endpoint.index, inputCount - 1);
+            // Continue with clamped index rather than returning
+        }
+
+        // Left side of behavior block
+        position.h = behaviorData->rect.hPos - BEHAVIOR_IO_OFFSET;
+        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * std::min(endpoint.index, std::max(0, inputCount - 1));
+    }
+
+    return position;
+}
+
+Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) {
+    Point position;
+
+    // First, determine if the element exists before trying to get position
+    CKObject *object = m_Context->GetObject(endpoint.id);
+    if (!object) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior output", endpoint.id);
+        return {HORIZONTAL_SPACING * 3.0f, VERTICAL_SPACING}; // Safe fallback position
+    }
+
+    // Regular behavior output
+    BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
+    if (!behaviorData) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
+        return {HORIZONTAL_SPACING * 3.0f, VERTICAL_SPACING};
+    }
+
+    // Validate output index - behaviors can have variable numbers of outputs
+    CKBehavior *behavior = (CKBehavior *) object;
+    int outputCount = behavior->GetOutputCount();
+    if (endpoint.index < 0 || endpoint.index >= outputCount) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior output index %d out of bounds (max %d)",
+            endpoint.index, outputCount - 1);
+        // Continue with clamped index rather than returning
+    }
+
+    // Right side of behavior block
+    position.h = behaviorData->rect.hPos + behaviorData->rect.hSize + BEHAVIOR_IO_OFFSET;
+    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * std::min(endpoint.index, std::max(0, outputCount - 1));
+
+    return position;
+}
+
+std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Point &endPos, const Link &link) {
+    // Determine link characteristics for routing
+    LinkCharacteristics characteristics = DetermineRoutingCharacteristics(link);
+
+    // Add alignment checks
+    characteristics.isVerticalAlignment = std::abs(startPos.h - endPos.h) < LINK_MARGIN;
+    characteristics.isHorizontalAlignment = std::abs(startPos.v - endPos.v) < LINK_MARGIN;
+
+    // Choose the appropriate routing strategy based on link characteristics
+    if (characteristics.isSelfConnection) {
+        // Self-connection loop
+        return CreateSelfConnectionPath(startPos, endPos, link);
+    } else if (characteristics.isStartLink) {
+        // Special routing for start point links
+        return CreateStartLinkPath(startPos, endPos, characteristics.isHorizontalAlignment);
+    } else if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
+        // Direct connection for aligned points
+        return {};
+    }  else if (characteristics.IsShortcutLink()) {
+        // Parameter shortcut links need special handling
+        return CreateParameterShortcutPath(startPos, endPos, link);
+    } else if (characteristics.IsBehaviorFlowLink()) {
+        // Standard behavior flow (bOut -> bIn) - right to left
+        return CreateBehaviorFlowPath(startPos, endPos);
+    } else if (characteristics.IsParameterDataLink()) {
+        // Parameter data flow (pOut -> pIn) - typically top to bottom
+        return CreateParameterDataPath(startPos, endPos);
+    } else if (characteristics.IsOperationLink()) {
+        // Operation link with special routing
+        return CreateOperationLinkPath(startPos, endPos, characteristics);
+    } else {
+        // Default case - create appropriate path based on endpoint types
+        if (characteristics.isSourceBehaviorOutput || characteristics.isTargetBehaviorInput) {
+            // Contains behavior endpoints - use behavior flow path
+            return CreateBehaviorFlowPath(startPos, endPos);
+        } else {
+            // Contains parameter endpoints - use parameter flow path
+            return CreateParameterDataPath(startPos, endPos);
+        }
+    }
+}
+
+std::vector<Point> LayoutCalculator::CreateSelfConnectionPath(const Point &startPos, const Point &endPos, const Link &link) {
+    std::vector<Point> path;
+
+    // Determine element size and type
+    float loopWidth = LOOP_SIZE;
+    float loopHeight = LOOP_SIZE;
+
+    // Behavior endpoints - use behavior size to calculate loop size
+    if (link.start.IsBehaviorRelated()) {
+        BehaviorData *behaviorData = GetBehaviorData(link.start.id);
+        if (behaviorData) {
+            // Make loop proportional to behavior size, but with minimum/maximum limits
+            loopWidth = std::max(behaviorData->rect.hSize * 0.5f, LOOP_SIZE);
+            loopHeight = std::max(behaviorData->rect.vSize * 0.5f, LOOP_SIZE);
+        }
+    }
+    // Parameter endpoints - adjust based on parameter spacing
+    else if (link.start.IsParameterRelated()) {
+        if (IsOperation(link.start.id)) {
+            // For operations, use smaller loops
+            loopWidth = LOOP_SIZE * 0.75f;
+            loopHeight = LOOP_SIZE * 0.75f;
+        } else {
+            // For other parameters, check if we can get behavior data
+            BehaviorData *behaviorData = GetBehaviorData(link.start.id);
+            if (behaviorData) {
+                // Use parameter spacing as a guide
+                float paramSpacing = behaviorData->rect.hSize / (behaviorData->rect.hSize / HORIZONTAL_SPACING + 1);
+                loopWidth = std::max(paramSpacing * 2.0f, LOOP_SIZE * 0.5f);
+                loopHeight = VERTICAL_SPACING * 2.0f;
+            }
+        }
+    }
+
+    // Adjust loop direction based on endpoint types
+    bool loopToRight = true;
+    bool loopUp = true;
+
+    // For behavior outputs, loop to right
+    if (link.start.IsBehaviorOutput()) {
+        loopToRight = true;
+    }
+    // For behavior inputs, loop to left
+    else if (link.start.IsBehaviorInput()) {
+        loopToRight = false;
+        loopWidth = -loopWidth; // Negative to go left
+    }
+    // For parameter outputs (typically bottom), loop down
+    else if (link.start.IsParameterOutput()) {
+        loopUp = false;
+        loopHeight = -loopHeight; // Negative to go down
+    }
+
+    // Create path with adaptive loop size and direction
+    // First horizontal segment
+    Point corner1 = startPos;
+    corner1.h += loopWidth;
+    path.push_back(corner1);
+
+    // Vertical segment
+    Point corner2 = corner1;
+    corner2.v += loopUp ? -loopHeight : loopHeight;
+    path.push_back(corner2);
+
+    // Second horizontal segment
+    Point corner3 = corner2;
+    corner3.h -= loopWidth;
+    path.push_back(corner3);
+
+    // Final vertical adjustment to match endpoint
+    Point corner4 = corner3;
+    corner4.v = endPos.v;
+    path.push_back(corner4);
+
+    return path;
+}
+
+std::vector<Point> LayoutCalculator::CreateStartLinkPath(
+    const Point &startPos, const Point &endPos, bool isHorizontalAligned) {
+    std::vector<Point> path;
+
+    if (!isHorizontalAligned) {
+        // Calculate the right extension from start point (header size + spacing)
+        float rightExtension = m_Data.header.hStartSize + HORIZONTAL_SPACING;
+
+        // First go right from start point
+        Point rightPoint(startPos.h + rightExtension, startPos.v);
+        path.push_back(rightPoint);
+
+        // Then go to end position's vertical level
+        Point alignedPoint(rightPoint.h, endPos.v);
+        path.push_back(alignedPoint);
+    }
+
+    return path;
+}
+
+std::vector<Point> LayoutCalculator::CreateBehaviorFlowPath(const Point &startPos, const Point &endPos) {
+    std::vector<Point> path;
+
+    // For behavior links, create a mainly horizontal path that moves from right to left
+    // Since behavior outputs are on the right and behavior inputs are on the left
+
+    // Calculate the midpoint to avoid other behaviors
+    float midH = (startPos.h + endPos.h) / 2.0f;
+
+    // Adjust depending on whether we're going left-to-right (forward) or right-to-left (backward)
+    bool isForwardLink = startPos.h < endPos.h;
+    bool isBackwardLink = startPos.h > endPos.h;
+
+    if (isForwardLink) {
+        // Start to mid horizontal
+        Point mid1(midH, startPos.v);
+        path.push_back(mid1);
+
+        // Mid vertical to end vertical level
+        Point mid2(midH, endPos.v);
+        path.push_back(mid2);
+    } else if (isBackwardLink) {
+        // More direct path for backward links - they're more common in behavior links
+        // Direct horizontal connection to target's column
+        Point horizontalPoint(endPos.h + HORIZONTAL_SPACING, startPos.v);
+        path.push_back(horizontalPoint);
+
+        // Vertical connection to target's level
+        Point verticalPoint(horizontalPoint.h, endPos.v);
+        path.push_back(verticalPoint);
+    } else {
+        // Same horizontal position but different vertical positions
+        // Create a single midpoint to avoid a direct vertical line
+        Point midPoint(startPos.h + HORIZONTAL_SPACING, startPos.v);
+        path.push_back(midPoint);
+
+        // Now connect vertically to the endpoint
+        Point verticalPoint(midPoint.h, endPos.v);
+        path.push_back(verticalPoint);
+
+        // Finally back to the endpoint's horizontal position
+        Point finalPoint(endPos.h, endPos.v);
+        path.push_back(finalPoint);
+    }
+
+    return path;
+}
+
+std::vector<Point> LayoutCalculator::CreateParameterDataPath(const Point &startPos, const Point &endPos) {
+    std::vector<Point> path;
+
+    // For parameter links, create a mainly vertical path that moves from top to bottom
+    // Since parameter outputs are typically on the bottom and parameter inputs on the top
+
+    // Calculate the vertical midpoint
+    float midV = (startPos.v + endPos.v) / 2.0f;
+
+    // Determine if this is an upward or downward link
+    bool isDownwardLink = startPos.v < endPos.v;
+    bool isUpwardLink = startPos.v > endPos.v;
+
+    if (isDownwardLink) {
+        // More direct path for downward links (more common in parameter flow)
+        // Vertical first to midpoint
+        Point verticalPoint(startPos.h, midV);
+        path.push_back(verticalPoint);
+
+        // Horizontal to target's column
+        Point horizontalPoint(endPos.h, midV);
+        path.push_back(horizontalPoint);
+    } else if (isUpwardLink) {
+        // For upward links, we need a more complex path to avoid crossing other elements
+        // Go horizontal first
+        Point horizontalPoint(startPos.h + GRID_HALF_CELL, startPos.v);
+        path.push_back(horizontalPoint);
+
+        // Then up to the level just above the end position
+        Point upPoint(horizontalPoint.h, endPos.v - GRID_HALF_CELL);
+        path.push_back(upPoint);
+
+        // Then horizontally to the end position's column
+        Point finalPoint(endPos.h, upPoint.v);
+        path.push_back(finalPoint);
+    } else {
+        // Same vertical position but different horizontal positions
+        // Create a single midpoint for a horizontal connection
+        Point midPoint(startPos.h, startPos.v + VERTICAL_SPACING);
+        path.push_back(midPoint);
+
+        // Then connect horizontally to the endpoint's column
+        Point horizontalPoint(endPos.h, midPoint.v);
+        path.push_back(horizontalPoint);
+    }
+
+    return path;
+}
+
+std::vector<Point> LayoutCalculator::CreateParameterShortcutPath(const Point &startPos, const Point &endPos,
+                                                                 const Link &link) {
+    std::vector<Point> path;
+
+    // Parameter shortcuts are special cases where we have parameter shortcuts acting as sources
+    // They need more direct paths with minimal bends to avoid visual clutter
+
+    // Get the behavior containing the shortcut
+    BehaviorData *behaviorData = GetBehaviorData(link.start.id);
+    if (!behaviorData || link.start.index >= static_cast<int>(behaviorData->sharedParams.size())) {
+        // If we can't find the behavior data or the shortcut parameter, use a generic path
+        return CreateParameterDataPath(startPos, endPos);
+    }
+
+    // Get the shortcut parameter
+    Parameter *param = &behaviorData->sharedParams[link.start.index];
+    if (!param) {
+        return CreateParameterDataPath(startPos, endPos);
+    }
+
+    // Check if target is a parameter input
+    if (link.end.IsParameterInput()) {
+        // For shortcut to parameter input connections, use a more direct path
+        // First go right from shortcut
+        Point rightPoint(startPos.h + GRID_HALF_CELL, startPos.v);
+        path.push_back(rightPoint);
+
+        // If there's a significant vertical offset, add a point
+        if (std::abs(startPos.v - endPos.v) > LINK_MARGIN) {
+            // Add intermediate point at the same vertical level as the target
+            Point verticalPoint(rightPoint.h, endPos.v);
+            path.push_back(verticalPoint);
+        }
+
+        // If there's still a significant horizontal offset, add a final point
+        if (std::abs(rightPoint.h - endPos.h) > LINK_MARGIN) {
+            Point finalPoint(endPos.h, endPos.v);
+            path.push_back(finalPoint);
+        }
+    } else if (link.end.IsBehaviorInput()) {
+        // Check if target is a behavior input (less common but possible)
+
+        // For shortcut to behavior input, create path similar to parameter->behavior connections
+        // Go vertical first
+        Point midPoint(startPos.h, (startPos.v + endPos.v) / 2.0f);
+        path.push_back(midPoint);
+
+        // Then horizontal
+        Point horizontalPoint(endPos.h + HORIZONTAL_SPACING, midPoint.v);
+        path.push_back(horizontalPoint);
+
+        // Then to target's level
+        Point finalPoint(horizontalPoint.h, endPos.v);
+        path.push_back(finalPoint);
+    } else {
+        // For all other cases, use a more generic parameter path
+
+        return CreateParameterDataPath(startPos, endPos);
+    }
+
+    return path;
+}
+
+std::vector<Point> LayoutCalculator::CreateOperationLinkPath(
+    const Point &startPos, const Point &endPos, const LinkCharacteristics &characteristics) {
+    std::vector<Point> path;
+
+    if (characteristics.isSourceOperation && characteristics.isTargetOperation) {
+        // Operation to operation connection (usually more direct)
+        // Go vertically down from start
+        Point verticalPoint = startPos;
+        verticalPoint.v += PARAMETER_LINK_VERTICAL_OFFSET;
+        path.push_back(verticalPoint);
+
+        // Go horizontally to end's column
+        Point horizontalPoint = verticalPoint;
+        horizontalPoint.h = endPos.h;
+        path.push_back(horizontalPoint);
+
+        // Go up to end position
+        Point upPoint = horizontalPoint;
+        upPoint.v = endPos.v;
+        path.push_back(upPoint);
+    } else if (characteristics.isSourceOperation) {
+        // From operation to another element
+        // Operation outputs go down first
+        Point downPoint(startPos.h, startPos.v + PARAMETER_LINK_VERTICAL_OFFSET);
+        path.push_back(downPoint);
+
+        // Then horizontally toward target
+        Point horizontalPoint(endPos.h, downPoint.v);
+        path.push_back(horizontalPoint);
+
+        // Then vertically to target
+        if (std::abs(horizontalPoint.v - endPos.v) > LINK_MARGIN) {
+            Point finalPoint(horizontalPoint.h, endPos.v);
+            path.push_back(finalPoint);
+        }
+    } else if (characteristics.isTargetOperation) {
+        // From element to operation
+        // Go vertically first to align with operation's level
+        Point verticalPoint(startPos.h, endPos.v);
+        path.push_back(verticalPoint);
+
+        // Then horizontally to operation
+        if (std::abs(verticalPoint.h - endPos.h) > LINK_MARGIN) {
+            Point finalPoint(endPos.h, verticalPoint.v);
+            path.push_back(finalPoint);
+        }
+    } else {
+        // Default for parameter operations that aren't directly on operations
+        // Use a more direct path with fewer bends
+        Point midPoint(startPos.h + (endPos.h - startPos.h) / 2.0f, startPos.v);
+        path.push_back(midPoint);
+
+        Point verticalPoint(midPoint.h, endPos.v);
+        path.push_back(verticalPoint);
+    }
+
+    return path;
+}
+
+bool LayoutCalculator::ArePointsAligned(const Point &startPos, const Point &endPos, float margin) const {
+    return std::abs(startPos.h - endPos.h) < margin || std::abs(startPos.v - endPos.v) < margin;
 }
