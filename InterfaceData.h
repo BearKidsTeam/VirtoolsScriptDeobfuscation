@@ -9,8 +9,7 @@
 #include "CKBehavior.h"
 #include "CKStateChunk.h"
 
-#undef min
-#undef max
+#include "Geometry.h"
 
 // Forward declarations
 class InterfaceData;
@@ -74,8 +73,6 @@ enum ExtraDataType {
 };
 
 // Forward declarations for core classes
-struct Rect;
-struct Point;
 struct Header;
 struct LinkEndpoint;
 struct Link;
@@ -98,234 +95,6 @@ struct InterfaceElement {
     explicit InterfaceElement(CK_ID elementId) : id(elementId) {}
 
     virtual ~InterfaceElement() = default;
-};
-
-/**
- * @struct Point
- * @brief Represents a 2D point in the interface
- */
-struct Point : InterfaceElement {
-    float h = 0.0f; ///< Horizontal coordinate
-    float v = 0.0f; ///< Vertical coordinate
-
-    Point() = default;
-
-    Point(float horizontal, float vertical) : h(horizontal), v(vertical) {}
-
-    /**
-     * @brief Calculates distance to another point
-     */
-    float DistanceTo(const Point &other) const;
-
-    /**
-     * @brief Calculates squared distance to another point (more efficient)
-     */
-    float DistanceSquaredTo(const Point &other) const;
-
-    /**
-     * @brief Adds another point to this one
-     */
-    Point operator+(const Point &other) const;
-
-    /**
-     * @brief Subtracts another point from this one
-     */
-    Point operator-(const Point &other) const;
-
-    /**
-     * @brief Scales the point by a factor
-     */
-    Point operator*(float factor) const;
-
-    /**
-     * @brief Divides the point by a factor
-     */
-    Point operator/(float factor) const;
-
-    /**
-     * @brief Adds another point to this one
-     */
-    Point &operator+=(const Point &other);
-
-    /**
-     * @brief Subtracts another point from this one
-     */
-    Point &operator-=(const Point &other);
-
-    /**
-     * @brief Scales the point by a factor
-     */
-    Point &operator*=(float factor);
-
-    /**
-     * @brief Divides the point by a factor
-     */
-    Point &operator/=(float factor);
-
-    /**
-     * @brief Checks if two points are equal
-     */
-    bool operator==(const Point &other) const;
-
-    /**
-     * @brief Checks if two points are not equal
-     */
-    bool operator!=(const Point &other) const;
-
-    /**
-     * @brief Calculates the dot product with another point
-     */
-    float Dot(const Point &other) const;
-
-    /**
-     * @brief Calculates the cross product with another point
-     */
-    float Cross(const Point &other) const;
-
-    /**
-     * @brief Returns the length of the vector
-     */
-    float Length() const;
-
-    /**
-     * @brief Returns the squared length of the vector (more efficient)
-     */
-    float LengthSquared() const;
-
-    /**
-     * @brief Normalizes the vector to unit length
-     */
-    Point Normalized() const;
-
-    /**
-     * @brief Rotates the point around the origin by the given angle (in radians)
-     */
-    Point Rotated(float angle) const;
-
-    /**
-     * @brief Calculates the angle between this point and another (in radians)
-     */
-    float AngleTo(const Point &other) const;
-
-    /**
-     * @brief Reflects the point across a normal vector
-     */
-    Point Reflected(const Point &normal) const;
-
-    /**
-     * @brief Linearly interpolates between this point and another
-     * @param other The target point
-     * @param t The interpolation factor (0-1)
-     */
-    Point Lerp(const Point &other, float t) const;
-
-    /**
-     * @brief Checks if the point is approximately equal to another
-     * @param other The other point
-     * @param epsilon The tolerance
-     */
-    bool ApproximatelyEqual(const Point &other, float epsilon = 0.001f) const;
-};
-
-/**
- * @struct Rect
- * @brief Represents a rectangular area in the interface
- */
-struct Rect : InterfaceElement {
-    float hPos = 300.0f;  ///< Horizontal position (left)
-    float vPos = 100.0f;  ///< Vertical position (top)
-    float hSize = 100.0f; ///< Width
-    float vSize = 40.0f;  ///< Height
-
-    Rect() = default;
-
-    /**
-     * @brief Constructor with all parameters
-     */
-    Rect(float hPosition, float vPosition, float width, float height)
-        : hPos(hPosition), vPos(vPosition), hSize(width), vSize(height) {}
-
-    /**
-     * @brief Sets the position of the Rect
-     */
-    void SetPosition(float h, float v);
-
-    /**
-     * @brief Sets the size of the Rect
-     */
-    void SetSize(float width, float height);
-
-    /**
-     * @brief Returns the right edge position
-     */
-    float Right() const;
-
-    /**
-     * @brief Returns the bottom edge position
-     */
-    float Bottom() const;
-
-    /**
-     * @brief Returns the center x-coordinate
-     */
-    float CenterX() const;
-
-    /**
-     * @brief Returns the center y-coordinate
-     */
-    float CenterY() const;
-
-    /**
-     * @brief Checks if a point is inside the rectangle
-     */
-    bool Contains(float x, float y) const;
-
-    /**
-     * @brief Checks if a point is inside the rectangle
-     */
-    bool Contains(const Point &point) const;
-
-    /**
-     * @brief Checks if this rectangle intersects with another
-     */
-    bool Intersects(const Rect &other) const;
-
-    /**
-     * @brief Calculates the area of intersection with another rectangle
-     * @return Area of intersection, 0 if no intersection
-     */
-    float IntersectionArea(const Rect &other) const;
-
-    /**
-     * @brief Expands the rectangle to include the given point
-     */
-    void ExpandToInclude(float x, float y);
-
-    /**
-     * @brief Expands the rectangle to include another rectangle
-     */
-    void ExpandToInclude(const Rect &other);
-
-    /**
-     * @brief Creates a rectangle that is the union of this and another
-     */
-    Rect Union(const Rect &other) const;
-
-    /**
-     * @brief Creates a rectangle that is the intersection of this and another
-     * @return Intersection rectangle, or empty rectangle if no intersection
-     */
-    Rect Intersection(const Rect &other) const;
-
-    /**
-     * @brief Insets the rectangle by the specified amounts
-     */
-    void Inset(float horizontal, float vertical);
-
-    /**
-     * @brief Offsets the rectangle by the specified amounts
-     */
-    void Offset(float horizontal, float vertical);
 };
 
 /**
@@ -773,7 +542,6 @@ struct BehaviorData : InterfaceElement {
 
     // Parameters
     std::vector<Parameter> localParams; ///< Local parameters
-
     std::vector<Parameter> sharedParams; ///< Shared parameters
 
     // Input/Output indices for graph behaviors
