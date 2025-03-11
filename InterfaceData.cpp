@@ -237,6 +237,14 @@ bool LinkEndpoint::IsParameterOutput() const {
     return type == ENDPOINT_POUT || type == ENDPOINT_POUT_SHORTCUT;
 }
 
+bool LinkEndpoint::IsParameterShortCut() const {
+    return type == ENDPOINT_POUT_SHORTCUT;
+}
+
+bool LinkEndpoint::IsParameterLocal() const {
+    return type == ENDPOINT_PLOCAL;
+}
+
 bool LinkEndpoint::IsBehaviorInput() const {
     return type == ENDPOINT_BIN || type == ENDPOINT_START_BIN;
 }
@@ -635,11 +643,12 @@ std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &positi
 
 void BehaviorData::Reset() {
     folded = false;
+    isUsingTarget = false;
+    isBehaviorGraph = false;
     depth = 0;
     rect = Rect();
     hExpandSize = 0.0f;
     vExpandSize = 0.0f;
-    isBehaviorGraph = false;
     links.clear();
     operations.clear();
     comments.clear();
@@ -773,6 +782,26 @@ BehaviorData *InterfaceData::FindBehavior(CK_ID id) {
     const auto it = std::find_if(behaviors.begin(), behaviors.end(),
                            [id](const BehaviorData &behavior) { return behavior.id == id; });
     return it != behaviors.end() ? &(*it) : nullptr;
+}
+
+Operation * InterfaceData::FindOperation(CK_ID id) {
+    // Check root behavior operations
+    for (auto &op : rootBehavior.operations) {
+        if (op.id == id) {
+            return &op;
+        }
+    }
+
+    // Check all other behaviors
+    for (auto &behavior : behaviors) {
+        for (auto &op : behavior.operations) {
+            if (op.id == id) {
+                return &op;
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 void InterfaceData::AddExtraData(const ExtraData &data) {

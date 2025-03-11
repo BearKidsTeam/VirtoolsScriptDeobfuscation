@@ -108,6 +108,7 @@ void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavio
 
     // Track target parameter if used
     if (behavior->IsUsingTarget()) {
+        behaviorData.isUsingTarget = true;
         CKParameterIn *targetParam = behavior->GetTargetParameter();
         if (targetParam) {
             CK_ID paramId = targetParam->GetID();

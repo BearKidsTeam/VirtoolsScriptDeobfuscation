@@ -336,6 +336,8 @@ struct Header : InterfaceElement {
     float vStart = 0.0f;            ///< Vertical offset where execution begins
     float hStartPos = 140.0f;       ///< Horizontal position of start
     float vStartPos = 0.0f;         ///< Vertical position of start
+    float hStartSize = 30.0f;       ///< Horizontal size of the start region
+    float vStartSize = 20.0f;       ///< Horizontal size of the start region
     float vSize = 0.0f;             ///< Vertical size of the start region
     CKDWORD color = 0xC8C8C8;       ///< Color of the header bar
     void *snapshot = nullptr;       ///< Optional bitmap snapshot
@@ -372,6 +374,16 @@ struct LinkEndpoint : InterfaceElement {
      * @brief Checks if this endpoint is a parameter output
      */
     bool IsParameterOutput() const;
+
+    /**
+     * @brief Checks if this endpoint is a parameter output shortcut
+     */
+    bool IsParameterShortCut() const;
+
+    /**
+     * @brief Checks if this endpoint is a local parameter
+     */
+    bool IsParameterLocal() const;
 
     /**
      * @brief Checks if this endpoint is a behavior input
@@ -743,11 +755,12 @@ public:
  */
 struct BehaviorData : InterfaceElement {
     bool folded = false;          ///< Whether the behavior is collapsed
+    bool isUsingTarget = false;       ///< Whether the behavior has a target
+    bool isBehaviorGraph = false; ///< Whether this is a behavior graph
     CKDWORD depth = 0;            ///< Depth in the behavior hierarchy
     Rect rect;                    ///< Size and position of the behavior
     float hExpandSize = 0.0f;     ///< Expanded horizontal size
     float vExpandSize = 0.0f;     ///< Expanded vertical size
-    bool isBehaviorGraph = false; ///< Whether this is a behavior graph
 
     // Links
     std::vector<Link> links; ///< Links within this behavior
@@ -921,6 +934,13 @@ public:
      * @return Pointer to the behavior if found, nullptr otherwise
      */
     BehaviorData *FindBehavior(CK_ID id);
+
+    /**
+     * Finds an operation by ID
+     * @param id Operation ID
+     * @return Pointer to the operation if found, nullptr otherwise
+     */
+    Operation *FindOperation(CK_ID id);
 
     /**
      * @brief Adds extra data to the interface
