@@ -524,7 +524,7 @@ public:
  */
 struct BehaviorData : InterfaceElement {
     bool folded = false;          ///< Whether the behavior is collapsed
-    bool isUsingTarget = false;       ///< Whether the behavior has a target
+    bool isUsingTarget = false;   ///< Whether the behavior has a target
     bool isBehaviorGraph = false; ///< Whether this is a behavior graph
     CKDWORD depth = 0;            ///< Depth in the behavior hierarchy
     Rect rect;                    ///< Size and position of the behavior

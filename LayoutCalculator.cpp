@@ -1,5 +1,6 @@
 #include "LayoutCalculator.h"
 
+#include <map>
 #include <algorithm>
 #include <stdexcept>
 
@@ -44,7 +45,10 @@ void LayoutCalculator::InitializeGraphState() {
 }
 
 void LayoutCalculator::CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds) {
-    std::vector<std::pair<BehaviorData *, CKBehavior *>> behaviors;
+    // Create a map to store behavior depth information for sorting
+    std::map<int, std::vector<std::pair<BehaviorData *, CKBehavior *>>> behaviorsByDepth;
+
+    // Collect behaviors and store them by depth
     for (auto &behaviorId : behaviorIds) {
         BehaviorData *behaviorData = GetBehaviorData(behaviorId);
         auto *behavior = (CKBehavior *) m_Context->GetObject(behaviorId);
@@ -53,27 +57,44 @@ void LayoutCalculator::CalculateBehaviorLayouts(const std::vector<CK_ID> &behavi
             continue;
         }
 
-        behaviors.emplace_back(behaviorData, behavior);
+        // Group behaviors by depth to ensure parent behaviors are processed before children
+        behaviorsByDepth[behaviorData->depth].emplace_back(behaviorData, behavior);
     }
 
-    for (const auto &pair : behaviors) {
-        CalculateBehaviorSize(*pair.first, pair.second);
+    // First pass: Calculate sizes for all behaviors, processing by depth (root first)
+    for (const auto &depthGroup : behaviorsByDepth) {
+        for (const auto &pair : depthGroup.second) {
+            CalculateBehaviorSize(*pair.first, pair.second);
+        }
     }
 
-    for (const auto &pair : behaviors) {
-        CalculateBehaviorPositions(*pair.first, pair.second, pair.first->depth == 0);
+    // Second pass: Calculate positions, ensuring parents are positioned before children
+    for (const auto &depthGroup : behaviorsByDepth) {
+        for (const auto &pair : depthGroup.second) {
+            CalculateBehaviorPositions(*pair.first, pair.second, pair.first->depth == 0);
+        }
     }
 }
 
 void LayoutCalculator::CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior *behavior) {
     if (behaviorData.depth <= 0) return;
 
-    // Calculate height based on max of inputs and outputs
-    int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
-    height = std::max(height, 1);
+    // Calculate height with better scaling for behaviors with many inputs/outputs
+    int inputCount = behavior->GetInputCount();
+    int outputCount = behavior->GetOutputCount();
 
-    // Calculate width based on parameters and name length
-    int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
+    // More sophisticated height calculation
+    int height = std::max(inputCount, outputCount);
+    if (height <= 1) {
+        height = 1;
+    }
+
+    // Calculate width considering parameter counts and name length
+    int paramInputCount = behavior->GetInputParameterCount();
+    int paramOutputCount = behavior->GetOutputParameterCount();
+
+    // Base width on parameter counts
+    int width = std::max(paramInputCount, paramOutputCount);
 
     // Consider name length in width calculation
     const char *name = behavior->GetName();
@@ -86,10 +107,19 @@ void LayoutCalculator::CalculateBehaviorSize(BehaviorData &behaviorData, CKBehav
     behaviorData.rect.hSize = static_cast<float>(width) * HORIZONTAL_SPACING;
     behaviorData.rect.vSize = static_cast<float>(height) * VERTICAL_SPACING;
 
+    if (behaviorData.isUsingTarget) {
+        behaviorData.rect.hSize += HORIZONTAL_SPACING;
+    }
+
     // Set expanded size for behavior graphs
     if (behaviorData.isBehaviorGraph) {
-        behaviorData.hExpandSize = behaviorData.rect.hSize * BEHAVIOR_EXPANSION_FACTOR;
-        behaviorData.vExpandSize = behaviorData.rect.vSize * BEHAVIOR_EXPANSION_FACTOR;
+        float expansionFactor = BEHAVIOR_EXPANSION_FACTOR;
+        if (behavior->GetSubBehaviorCount() > 10) {
+            expansionFactor *= 1.5f; // More space for very complex behavior graphs
+        }
+
+        behaviorData.hExpandSize = behaviorData.rect.hSize * expansionFactor;
+        behaviorData.vExpandSize = behaviorData.rect.vSize * expansionFactor;
     }
 }
 
@@ -111,13 +141,13 @@ void LayoutCalculator::CalculateElementPositions(const std::vector<CK_ID> &behav
 
 void LayoutCalculator::FinalizeScriptLayout(CKBehavior *script) {
     // Calculate the total height of the behavior graph
-    Rect& requiredSize = m_RequiredSize[script->GetID()];
+    Rect &requiredSize = m_RequiredSize[script->GetID()];
 
     // Ensure we have a valid size
     if (requiredSize.vSize <= 0) {
         // Calculate fallback size based on behavior count
         float totalHeight = 0;
-        for (const auto& behavior : m_Data.behaviors) {
+        for (const auto &behavior : m_Data.behaviors) {
             totalHeight += behavior.rect.vSize + VERTICAL_SPACING;
         }
         requiredSize.vSize = std::max(totalHeight, VERTICAL_SPACING * 5.0f);
@@ -200,7 +230,7 @@ void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *b
     m_Edges.clear();
 
     // Create vertices for root and all sub-behaviors
-    CreateGraphVertices(behaviorGraph, behavior);
+    CreateGraphVertices(behavior);
 
     // Get sub-behavior count
     const int subBehaviorCount = behavior->GetSubBehaviorCount();
@@ -225,7 +255,7 @@ void LayoutCalculator::ConstructGraph(BehaviorData &behaviorGraph, CKBehavior *b
     ConnectOrphanedBehaviors(behaviorGraph, behavior->GetID());
 }
 
-void LayoutCalculator::CreateGraphVertices(BehaviorData &behaviorGraph, CKBehavior *behavior) {
+void LayoutCalculator::CreateGraphVertices(CKBehavior *behavior) {
     // Create root vertex
     const CK_ID rootId = behavior->GetID();
     m_Vertices[rootId] = Vertex();
@@ -686,7 +716,7 @@ void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) 
                 if (behaviorData || IsOperation(paramLink.end.id)) {
                     // Normal input
                     MoveOperationToPosition(*startOperation,
-                                          GetInputParamPosition(paramLink.end.id, paramLink.end.index));
+                                            GetInputParamPosition(paramLink.end.id, paramLink.end.index));
                     m_MovedOperations.insert(paramLink.start.id);
                 }
             } else if (paramLink.end.type == ENDPOINT_TARGET_PIN) {
@@ -695,7 +725,7 @@ void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) 
                 if (behaviorData) {
                     // Target input
                     MoveOperationToPosition(*startOperation,
-                                          GetInputParamPosition(paramLink.end.id, -1));
+                                            GetInputParamPosition(paramLink.end.id, -1));
                     m_MovedOperations.insert(paramLink.start.id);
                 }
             }
@@ -705,7 +735,7 @@ void LayoutCalculator::CalculateOperationPositions(BehaviorData &behaviorGraph) 
 
 void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGraph, bool isInputDirection) {
     // Maintain a set of parameters we've already positioned to avoid overwrites
-    std::unordered_set<Parameter*> processedParams;
+    std::unordered_set<Parameter *> processedParams;
 
     for (auto &paramLink : behaviorGraph.links) {
         if (paramLink.type != LINK_TYPE_PARAMETER)
@@ -893,7 +923,7 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
         // Validate index is within bounds
         if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->sharedParams.size())) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Parameter shortcut index %d out of bounds (size %d)",
-                endpoint.index, behaviorData->sharedParams.size());
+                                         endpoint.index, behaviorData->sharedParams.size());
             return {HORIZONTAL_SPACING, VERTICAL_SPACING};
         }
 
@@ -918,7 +948,7 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
         }
 
         // Operation outputs come from the bottom
-        position.h = operation->hPos; // Center of the operation
+        position.h = operation->hPos;                                  // Center of the operation
         position.v = operation->vPos + PARAMETER_LINK_VERTICAL_OFFSET; // Below the operation
     } else {
         // Parameter output on behavior
@@ -948,7 +978,7 @@ Point LayoutCalculator::GetLocalParameterPosition(const LinkEndpoint &endpoint) 
     // Validate parameter index
     if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->localParams.size())) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Local parameter index %d out of bounds (size %d)",
-            endpoint.index, behaviorData->localParams.size());
+                                     endpoint.index, behaviorData->localParams.size());
         return {HORIZONTAL_SPACING, VERTICAL_SPACING};
     }
 
@@ -978,7 +1008,8 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
     } else {
         CKObject *object = m_Context->GetObject(endpoint.id);
         if (!object) {
-            m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior input", endpoint.id);
+            m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior input",
+                                         endpoint.id);
             return {HORIZONTAL_SPACING, VERTICAL_SPACING}; // Safe fallback position
         }
 
@@ -994,7 +1025,7 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
         int inputCount = behavior->GetInputCount();
         if (endpoint.index < 0 || endpoint.index >= inputCount) {
             m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior input index %d out of bounds (max %d)",
-                endpoint.index, inputCount - 1);
+                                         endpoint.index, inputCount - 1);
             // Continue with clamped index rather than returning
         }
 
@@ -1028,7 +1059,7 @@ Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) 
     int outputCount = behavior->GetOutputCount();
     if (endpoint.index < 0 || endpoint.index >= outputCount) {
         m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior output index %d out of bounds (max %d)",
-            endpoint.index, outputCount - 1);
+                                     endpoint.index, outputCount - 1);
         // Continue with clamped index rather than returning
     }
 
@@ -1057,7 +1088,7 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     } else if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
         // Direct connection for aligned points
         return {};
-    }  else if (characteristics.IsShortcutLink()) {
+    } else if (characteristics.IsShortcutLink()) {
         // Parameter shortcut links need special handling
         return CreateParameterShortcutPath(startPos, endPos, link);
     } else if (characteristics.IsBehaviorFlowLink()) {

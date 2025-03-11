@@ -225,10 +225,9 @@ private:
 
     /**
      * Creates vertices for all behaviors
-     * @param behaviorGraph Behavior graph data
      * @param behavior CK behavior
      */
-    void CreateGraphVertices(BehaviorData &behaviorGraph, CKBehavior *behavior);
+    void CreateGraphVertices(CKBehavior *behavior);
 
     /**
      * Gets valid behavior links from the graph

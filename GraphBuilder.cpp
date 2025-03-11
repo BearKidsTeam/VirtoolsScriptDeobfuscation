@@ -2,7 +2,6 @@
 #include "CKAll.h"
 
 #include <queue>
-#include <algorithm>
 #include <stdexcept>
 
 #undef min
