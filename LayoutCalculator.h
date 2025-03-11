@@ -148,9 +148,15 @@ private:
     /**
      * Calculates layouts for all behaviors
      * @param behaviorIds Ordered list of behavior IDs
-     * @param script The root behavior
      */
-    void CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds, CKBehavior *script);
+    void CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds);
+
+    /**
+     * Calculates the size of a behavior
+     * @param behaviorData Behavior data
+     * @param behavior CK behavior
+     */
+    void CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior *behavior);
 
     /**
      * Calculates positions for operations and parameters
@@ -319,11 +325,11 @@ private:
     /**
      * Places a behavior within its parent
      * @param behaviorData Behavior data
-     * @param horizontalPos Horizontal position
-     * @param verticalPos Vertical position
+     * @param hPos Horizontal position
+     * @param vPos Vertical position
      * @param isRoot Whether this is the root node
      */
-    void PlaceBehaviorInParent(BehaviorData &behaviorData, float horizontalPos, float verticalPos, bool isRoot);
+    void PlaceBehaviorInParent(BehaviorData &behaviorData, float hPos, float vPos, bool isRoot);
 
     /**
      * Calculates positions for behaviors

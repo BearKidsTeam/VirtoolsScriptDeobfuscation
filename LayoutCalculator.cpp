@@ -19,7 +19,7 @@ void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     InitializeGraphState();
 
     // Phase 1: Calculate behavior positions
-    CalculateBehaviorLayouts(behaviorIds, script);
+    CalculateBehaviorLayouts(behaviorIds);
 
     // Phase 2: Calculate operation and parameter positions
     CalculateElementPositions(behaviorIds);
@@ -43,16 +43,53 @@ void LayoutCalculator::InitializeGraphState() {
     m_MovedOperations.clear();
 }
 
-void LayoutCalculator::CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds, CKBehavior *script) {
+void LayoutCalculator::CalculateBehaviorLayouts(const std::vector<CK_ID> &behaviorIds) {
+    std::vector<std::pair<BehaviorData *, CKBehavior *>> behaviors;
     for (auto &behaviorId : behaviorIds) {
         BehaviorData *behaviorData = GetBehaviorData(behaviorId);
-        if (behaviorData && behaviorData->isBehaviorGraph) {
-            CalculateBehaviorPositions(
-                *behaviorData,
-                (CKBehavior *) m_Context->GetObject(behaviorData->id),
-                behaviorData->depth == 0
-            );
+        auto *behavior = (CKBehavior *) m_Context->GetObject(behaviorId);
+        if (!behaviorData || !behavior) {
+            m_Context->OutputToConsoleEx((CKSTRING) "Behavior not found: %d", behaviorId);
+            continue;
         }
+
+        behaviors.emplace_back(behaviorData, behavior);
+    }
+
+    for (const auto &pair : behaviors) {
+        CalculateBehaviorSize(*pair.first, pair.second);
+    }
+
+    for (const auto &pair : behaviors) {
+        CalculateBehaviorPositions(*pair.first, pair.second, pair.first->depth == 0);
+    }
+}
+
+void LayoutCalculator::CalculateBehaviorSize(BehaviorData &behaviorData, CKBehavior *behavior) {
+    if (behaviorData.depth <= 0) return;
+
+    // Calculate height based on max of inputs and outputs
+    int height = std::max(behavior->GetOutputCount(), behavior->GetInputCount());
+    height = std::max(height, 1);
+
+    // Calculate width based on parameters and name length
+    int width = std::max(behavior->GetOutputParameterCount(), behavior->GetInputParameterCount());
+
+    // Consider name length in width calculation
+    const char *name = behavior->GetName();
+    const size_t nameLength = name ? strlen(name) : 0;
+    const int nameWidth = static_cast<int>(std::floor(nameLength * 0.4 + 1));
+    width = std::max(width, nameWidth);
+    width = std::max(width, 2);
+
+    // Set size
+    behaviorData.rect.hSize = static_cast<float>(width) * HORIZONTAL_SPACING;
+    behaviorData.rect.vSize = static_cast<float>(height) * VERTICAL_SPACING;
+
+    // Set expanded size for behavior graphs
+    if (behaviorData.isBehaviorGraph) {
+        behaviorData.hExpandSize = behaviorData.rect.hSize * BEHAVIOR_EXPANSION_FACTOR;
+        behaviorData.vExpandSize = behaviorData.rect.vSize * BEHAVIOR_EXPANSION_FACTOR;
     }
 }
 
@@ -432,14 +469,13 @@ Rect LayoutCalculator::CalculateSubgraphSize(BehaviorData &behaviorData, bool is
     return size;
 }
 
-void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float horizontalPos, float verticalPos,
-                                             bool isRoot) {
+void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float hPos, float vPos, bool isRoot) {
     // Position the behavior (unless it's the root)
     if (!isRoot) {
-        behaviorData.rect.hPos = horizontalPos;
+        behaviorData.rect.hPos = hPos;
         // Center the behavior vertically within its allocated space
         float verticalCenter = (m_RequiredSize[behaviorData.id].vSize - behaviorData.rect.vSize) / 2;
-        behaviorData.rect.vPos = verticalPos + verticalCenter;
+        behaviorData.rect.vPos = vPos + verticalCenter;
     }
 
     // Position all children
@@ -462,16 +498,16 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
             // Calculate horizontal position based on parent type
             float childHorizontalPos;
             if (isRoot) {
-                childHorizontalPos = horizontalPos + HORIZONTAL_SPACING;
+                childHorizontalPos = hPos + HORIZONTAL_SPACING;
             } else {
-                childHorizontalPos = horizontalPos + behaviorData.rect.hSize + HORIZONTAL_SPACING * BEHAVIOR_PADDING;
+                childHorizontalPos = hPos + behaviorData.rect.hSize + HORIZONTAL_SPACING * BEHAVIOR_PADDING;
             }
 
             // Place the child behavior
             PlaceBehaviorInParent(
                 *targetData,
                 childHorizontalPos,
-                verticalPos + currentVerticalOffset,
+                vPos + currentVerticalOffset,
                 false
             );
 
@@ -483,6 +519,9 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
 }
 
 float LayoutCalculator::CalculateBehaviorPositions(BehaviorData &behaviorGraph, CKBehavior *behavior, bool isScript) {
+    if (!behaviorGraph.isBehaviorGraph)
+        return 0.0f;
+
     // Build the graph representation
     ConstructGraph(behaviorGraph, behavior);
 
@@ -951,7 +990,7 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
         }
 
         // Validate input index - behaviors can have variable numbers of inputs
-        CKBehavior *behavior = (CKBehavior *) object;
+        auto *behavior = (CKBehavior *) object;
         int inputCount = behavior->GetInputCount();
         if (endpoint.index < 0 || endpoint.index >= inputCount) {
             m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior input index %d out of bounds (max %d)",
@@ -985,7 +1024,7 @@ Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) 
     }
 
     // Validate output index - behaviors can have variable numbers of outputs
-    CKBehavior *behavior = (CKBehavior *) object;
+    auto *behavior = (CKBehavior *) object;
     int outputCount = behavior->GetOutputCount();
     if (endpoint.index < 0 || endpoint.index >= outputCount) {
         m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior output index %d out of bounds (max %d)",
