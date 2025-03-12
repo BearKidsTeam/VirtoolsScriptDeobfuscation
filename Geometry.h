@@ -83,6 +83,14 @@ public:
     bool operator!=(const Point &other) const { return !(*this == other); }
 
     /**
+     * @brief Checks if the point is zero
+     * @return True if both coordinates are zero
+     */
+    bool Zero() const {
+        return h == 0.0f && v == 0.0f;
+    }
+
+    /**
      * @brief Calculates the dot product with another point
      * @param other The other point
      * @return The dot product
