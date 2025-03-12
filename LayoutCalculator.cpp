@@ -14,7 +14,7 @@ LayoutCalculator::LayoutCalculator(InterfaceData &targetData, CKContext *context
 
 void LayoutCalculator::CalculateLayout(CKBehavior *script) {
     // Get ordered behavior IDs for consistent processing
-    const auto behaviorIds = GetBehaviorIds();
+    const auto behaviorIds = std::move(GetBehaviorIds());
 
     // Clear graph state
     InitializeGraphState();
@@ -748,12 +748,14 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
 
             if (paramLink.start.type == ENDPOINT_PLOCAL) {
                 // Local parameter
-                if (paramLink.start.index >= 0 && paramLink.start.index < static_cast<int>(behaviorGraph.localParams.size())) {
+                if (paramLink.start.index >= 0 &&
+                    paramLink.start.index < static_cast<int>(behaviorGraph.localParams.size())) {
                     startParam = &behaviorGraph.localParams[paramLink.start.index];
                 }
             } else if (paramLink.start.type == ENDPOINT_POUT_SHORTCUT) {
                 // Shared parameter
-                if (paramLink.start.index >= 0 && paramLink.start.index < static_cast<int>(behaviorGraph.sharedParams.size())) {
+                if (paramLink.start.index >= 0 &&
+                    paramLink.start.index < static_cast<int>(behaviorGraph.sharedParams.size())) {
                     startParam = &behaviorGraph.sharedParams[paramLink.start.index];
                 }
             }
@@ -775,7 +777,8 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
 
             if (paramLink.end.type == ENDPOINT_PLOCAL) {
                 // Local parameter
-                if (paramLink.end.index >= 0 && paramLink.end.index < static_cast<int>(behaviorGraph.localParams.size())) {
+                if (paramLink.end.index >= 0 &&
+                    paramLink.end.index < static_cast<int>(behaviorGraph.localParams.size())) {
                     endParam = &behaviorGraph.localParams[paramLink.end.index];
                 }
             }
@@ -783,7 +786,8 @@ void LayoutCalculator::CalculateLocalParameterPositions(BehaviorData &behaviorGr
             if (endParam && processedParams.find(endParam) == processedParams.end()) {
                 if (paramLink.start.type == ENDPOINT_POUT) {
                     // From output
-                    MoveParameterToPosition(*endParam, GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
+                    MoveParameterToPosition(
+                        *endParam, GetOutputParamPosition(paramLink.start.id, paramLink.start.index));
                     processedParams.insert(endParam);
                 }
             }
@@ -836,7 +840,7 @@ LayoutCalculator::LinkCharacteristics LayoutCalculator::DetermineRoutingCharacte
     result.isTargetOperation = IsOperation(link.end.id);
 
     // Check for parameter shortcuts
-    result.isParameterShortcut = (link.start.type == ENDPOINT_POUT_SHORTCUT);
+    result.isParameterShortcut = link.start.IsParameterShortCut();
 
     return result;
 }
@@ -987,14 +991,6 @@ Point LayoutCalculator::GetLocalParameterPosition(const LinkEndpoint &endpoint) 
     position.h = static_cast<float>(param.hPos);
     position.v = static_cast<float>(param.vPos);
 
-    // Parameters should have non-zero positions once layout is calculated
-    if (position.h == 0.0f && position.v == 0.0f) {
-        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Local parameter has zero position");
-        // Calculate a reasonable position within behavior's area
-        position.h = behaviorData->rect.hPos + behaviorData->rect.hSize / 2.0f;
-        position.v = behaviorData->rect.vPos + behaviorData->rect.vSize / 2.0f;
-    }
-
     return position;
 }
 
@@ -1031,7 +1027,8 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
 
         // Left side of behavior block
         position.h = behaviorData->rect.hPos - BEHAVIOR_IO_OFFSET;
-        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * std::min(endpoint.index, std::max(0, inputCount - 1));
+        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET +
+            VERTICAL_SPACING * std::min(endpoint.index, std::max(0, inputCount - 1));
     }
 
     return position;
@@ -1065,7 +1062,8 @@ Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) 
 
     // Right side of behavior block
     position.h = behaviorData->rect.hPos + behaviorData->rect.hSize + BEHAVIOR_IO_OFFSET;
-    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * std::min(endpoint.index, std::max(0, outputCount - 1));
+    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET +
+        VERTICAL_SPACING * std::min(endpoint.index, std::max(0, outputCount - 1));
 
     return position;
 }
@@ -1078,7 +1076,7 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     characteristics.isVerticalAlignment = std::abs(startPos.h - endPos.h) < LINK_MARGIN;
     characteristics.isHorizontalAlignment = std::abs(startPos.v - endPos.v) < LINK_MARGIN;
 
-    // Choose the appropriate routing strategy based on link characteristics
+    // Choose the appropriate routing strategy
     if (characteristics.isSelfConnection) {
         // Self-connection loop
         return CreateSelfConnectionPath(startPos, endPos, link);
@@ -1088,9 +1086,9 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     } else if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
         // Direct connection for aligned points
         return {};
-    } else if (characteristics.IsShortcutLink()) {
-        // Parameter shortcut links need special handling
-        return CreateParameterShortcutPath(startPos, endPos, link);
+    } else if (characteristics.IsSharedParameterLink()) {
+        // Special handling for shared parameter links
+        return CreateParameterSharePath(startPos, endPos, link);
     } else if (characteristics.IsBehaviorFlowLink()) {
         // Standard behavior flow (bOut -> bIn) - right to left
         return CreateBehaviorFlowPath(startPos, endPos);
@@ -1112,7 +1110,8 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     }
 }
 
-std::vector<Point> LayoutCalculator::CreateSelfConnectionPath(const Point &startPos, const Point &endPos, const Link &link) {
+std::vector<Point> LayoutCalculator::CreateSelfConnectionPath(const Point &startPos, const Point &endPos,
+                                                              const Link &link) {
     std::vector<Point> path;
 
     // Determine element size and type
@@ -1306,67 +1305,10 @@ std::vector<Point> LayoutCalculator::CreateParameterDataPath(const Point &startP
     return path;
 }
 
-std::vector<Point> LayoutCalculator::CreateParameterShortcutPath(const Point &startPos, const Point &endPos,
-                                                                 const Link &link) {
-    std::vector<Point> path;
-
-    // Parameter shortcuts are special cases where we have parameter shortcuts acting as sources
-    // They need more direct paths with minimal bends to avoid visual clutter
-
-    // Get the behavior containing the shortcut
-    BehaviorData *behaviorData = GetBehaviorData(link.start.id);
-    if (!behaviorData || link.start.index >= static_cast<int>(behaviorData->sharedParams.size())) {
-        // If we can't find the behavior data or the shortcut parameter, use a generic path
-        return CreateParameterDataPath(startPos, endPos);
-    }
-
-    // Get the shortcut parameter
-    Parameter *param = &behaviorData->sharedParams[link.start.index];
-    if (!param) {
-        return CreateParameterDataPath(startPos, endPos);
-    }
-
-    // Check if target is a parameter input
-    if (link.end.IsParameterInput()) {
-        // For shortcut to parameter input connections, use a more direct path
-        // First go right from shortcut
-        Point rightPoint(startPos.h + GRID_HALF_CELL, startPos.v);
-        path.push_back(rightPoint);
-
-        // If there's a significant vertical offset, add a point
-        if (std::abs(startPos.v - endPos.v) > LINK_MARGIN) {
-            // Add intermediate point at the same vertical level as the target
-            Point verticalPoint(rightPoint.h, endPos.v);
-            path.push_back(verticalPoint);
-        }
-
-        // If there's still a significant horizontal offset, add a final point
-        if (std::abs(rightPoint.h - endPos.h) > LINK_MARGIN) {
-            Point finalPoint(endPos.h, endPos.v);
-            path.push_back(finalPoint);
-        }
-    } else if (link.end.IsBehaviorInput()) {
-        // Check if target is a behavior input (less common but possible)
-
-        // For shortcut to behavior input, create path similar to parameter->behavior connections
-        // Go vertical first
-        Point midPoint(startPos.h, (startPos.v + endPos.v) / 2.0f);
-        path.push_back(midPoint);
-
-        // Then horizontal
-        Point horizontalPoint(endPos.h + HORIZONTAL_SPACING, midPoint.v);
-        path.push_back(horizontalPoint);
-
-        // Then to target's level
-        Point finalPoint(horizontalPoint.h, endPos.v);
-        path.push_back(finalPoint);
-    } else {
-        // For all other cases, use a more generic parameter path
-
-        return CreateParameterDataPath(startPos, endPos);
-    }
-
-    return path;
+std::vector<Point> LayoutCalculator::CreateParameterSharePath(const Point &startPos, const Point &endPos,
+                                                              const Link &link) {
+    // TODO: Implement a path for parameter shortcuts
+    return {};
 }
 
 std::vector<Point> LayoutCalculator::CreateOperationLinkPath(

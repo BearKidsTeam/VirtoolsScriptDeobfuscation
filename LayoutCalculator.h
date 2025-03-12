@@ -99,30 +99,40 @@ private:
         bool isSourceOperation = false;
         bool isTargetOperation = false;
         bool isParameterShortcut = false;
+        bool isSharedParameter = false;
 
-        // Get whether this is a typical behavior link (BBOut -> BBIn)
+        /**
+         * @brief Checks if this is a typical behavior flow link (BBOut -> BBIn)
+         */
         bool IsBehaviorFlowLink() const {
             return linkType == LinkType::BehaviorFlow &&
-                   isSourceBehaviorOutput &&
-                   isTargetBehaviorInput;
+                isSourceBehaviorOutput &&
+                isTargetBehaviorInput;
         }
 
-        // Get whether this is a parameter data link (paramOut -> paramIn)
+        /**
+         * @brief Checks if this is a parameter data link (paramOut -> paramIn)
+         */
         bool IsParameterDataLink() const {
             return linkType == LinkType::ParameterData &&
-                   isSourceParameterOutput &&
-                   isTargetParameterInput;
+                isSourceParameterOutput &&
+                isTargetParameterInput;
         }
 
-        // Get whether this is an operation link
+        /**
+         * @brief Checks if this is an operation link
+         */
         bool IsOperationLink() const {
             return linkType == LinkType::ParameterOperation ||
-                   isSourceOperation ||
-                   isTargetOperation;
+                isSourceOperation ||
+                isTargetOperation;
         }
 
-        bool IsShortcutLink() const {
-            return isParameterShortcut;
+        /**
+         * @brief Checks if this is a shared parameter or shortcut link
+         */
+        bool IsSharedParameterLink() const {
+            return isParameterShortcut || isSharedParameter;
         }
     };
 
@@ -184,14 +194,14 @@ private:
      * @param id Behavior ID
      * @return Pointer to behavior data or nullptr
      */
-    BehaviorData* GetBehaviorData(CK_ID id) const;
+    BehaviorData *GetBehaviorData(CK_ID id) const;
 
     /**
      * Gets an operation by ID
      * @param id Operation ID
      * @return Pointer to operation or nullptr
      */
-    Operation* GetOperation(CK_ID id) const;
+    Operation *GetOperation(CK_ID id) const;
 
     /**
      * Checks if an ID is an operation
@@ -253,13 +263,13 @@ private:
      * Sorts behavior links for optimal layout
      * @param behaviorLinks Vector of behavior links
      */
-    void SortBehaviorLinks(std::vector<Link*>& behaviorLinks);
+    void SortBehaviorLinks(std::vector<Link *> &behaviorLinks);
 
     /**
      * Connects all behaviors to root when no valid links exist
      * @param behavior Root behavior
      */
-    void ConnectDisconnectedBehaviorsToRoot(CKBehavior* behavior);
+    void ConnectDisconnectedBehaviorsToRoot(CKBehavior *behavior);
 
     /**
      * Connects behaviors without incoming edges
@@ -346,7 +356,8 @@ private:
      * @param startHorizontal Horizontal offset
      * @param startVertical Vertical offset
      */
-    void RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior, float startHorizontal, float startVertical);
+    void RecalculateAbsolutePositions(BehaviorData &behaviorData, CKBehavior *behavior, float startHorizontal,
+                                      float startVertical);
 
     /**
      * Sets start information for script
@@ -512,13 +523,13 @@ private:
     std::vector<Point> CreateParameterDataPath(const Point &startPos, const Point &endPos);
 
     /**
-     * Creates a shortcut path for parameter links
+     * Creates a parameter share link path
      * @param startPos Start position
      * @param endPos End position
      * @param link Link being routed
      * @return Vector of control points
      */
-    std::vector<Point> CreateParameterShortcutPath(const Point &startPos, const Point &endPos, const Link &link);
+    std::vector<Point> CreateParameterSharePath(const Point &startPos, const Point &endPos, const Link &link);
 
     /**
      * Creates a parameter operation link path
