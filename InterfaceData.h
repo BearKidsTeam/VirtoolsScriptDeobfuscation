@@ -21,7 +21,7 @@ class InterfaceData;
 enum LinkType {
     LINK_TYPE_BEHAVIOR     = 1,      ///< Behavior link (control flow)
     LINK_TYPE_PARAMETER    = 2,      ///< Parameter link (data flow)
-    LINK_TYPE_PARAMETER_OP = 0x10002 ///< Parameter operation link
+    LINK_TYPE_PARAMETER_OP = 0x10002 ///< Parameter hierarchy link - used for parameter propagation through the behavior hierarchy and parameter operations
 };
 
 /**
