@@ -807,6 +807,12 @@ void LayoutCalculator::RouteLink(Link &link) {
     const Point startPos = GetEndpointPosition(link.start);
     const Point endPos = GetEndpointPosition(link.end);
 
+    if (startPos.Zero() || endPos.Zero()) {
+        // Invalid start or end position
+        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Invalid start or end position for link %d", link.id);
+        return;
+    }
+
     // Create a path connecting the points - exclude start and end positions
     link.points = CreatePath(startPos, endPos, link);
 }
@@ -872,7 +878,7 @@ Point LayoutCalculator::GetParameterInputPosition(const LinkEndpoint &endpoint) 
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Left side, middle of the block
@@ -883,7 +889,7 @@ Point LayoutCalculator::GetParameterInputPosition(const LinkEndpoint &endpoint) 
         Operation *operation = GetOperation(endpoint.id);
         if (!operation) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation with ID %d not found", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Position based on input index
@@ -902,7 +908,7 @@ Point LayoutCalculator::GetParameterInputPosition(const LinkEndpoint &endpoint) 
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         float offset = (behaviorData->isUsingTarget) ? HORIZONTAL_SPACING : GRID_HALF_CELL;
@@ -921,14 +927,14 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Validate index is within bounds
         if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->sharedParams.size())) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Parameter shortcut index %d out of bounds (size %d)",
                                          endpoint.index, behaviorData->sharedParams.size());
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Get the parameter
@@ -948,7 +954,7 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
         Operation *operation = GetOperation(endpoint.id);
         if (!operation) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Operation with ID %d not found", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Operation outputs come from the bottom
@@ -959,7 +965,7 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         float offset = (behaviorData->isUsingTarget) ? HORIZONTAL_SPACING : GRID_HALF_CELL;
@@ -976,14 +982,14 @@ Point LayoutCalculator::GetLocalParameterPosition(const LinkEndpoint &endpoint) 
     BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
     if (!behaviorData) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-        return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        return position;
     }
 
     // Validate parameter index
     if (endpoint.index < 0 || endpoint.index >= static_cast<int>(behaviorData->localParams.size())) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Local parameter index %d out of bounds (size %d)",
                                      endpoint.index, behaviorData->localParams.size());
-        return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+        return position;
     }
 
     // Get exact parameter position
@@ -1006,14 +1012,14 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
         if (!object) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior input",
                                          endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING}; // Safe fallback position
+            return position; // Safe fallback position
         }
 
         // Regular behavior input
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-            return {HORIZONTAL_SPACING, VERTICAL_SPACING};
+            return position;
         }
 
         // Validate input index - behaviors can have variable numbers of inputs
@@ -1075,6 +1081,10 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     // Add alignment checks
     characteristics.isVerticalAlignment = std::abs(startPos.h - endPos.h) < LINK_MARGIN;
     characteristics.isHorizontalAlignment = std::abs(startPos.v - endPos.v) < LINK_MARGIN;
+    if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
+        // Direct connection for aligned points
+        return {};
+    }
 
     // Choose the appropriate routing strategy
     if (characteristics.isSelfConnection) {
@@ -1083,9 +1093,6 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     } else if (characteristics.isStartLink) {
         // Special routing for start point links
         return CreateStartLinkPath(startPos, endPos, characteristics.isHorizontalAlignment);
-    } else if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
-        // Direct connection for aligned points
-        return {};
     } else if (characteristics.IsSharedParameterLink()) {
         // Special handling for shared parameter links
         return CreateParameterSharePath(startPos, endPos, link);
