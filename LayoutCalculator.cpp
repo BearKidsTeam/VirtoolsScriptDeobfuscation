@@ -1047,14 +1047,14 @@ Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) 
     CKObject *object = m_Context->GetObject(endpoint.id);
     if (!object) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior output", endpoint.id);
-        return {HORIZONTAL_SPACING * 3.0f, VERTICAL_SPACING}; // Safe fallback position
+        return position; // Safe fallback position
     }
 
     // Regular behavior output
     BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
     if (!behaviorData) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
-        return {HORIZONTAL_SPACING * 3.0f, VERTICAL_SPACING};
+        return position;
     }
 
     // Validate output index - behaviors can have variable numbers of outputs
