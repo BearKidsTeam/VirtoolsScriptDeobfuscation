@@ -937,18 +937,10 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
             return position;
         }
 
-        // Get the parameter
+        // Get the parameter position
         Parameter &param = behaviorData->sharedParams[endpoint.index];
-
-        // Get position based on actual parameter position
         position.h = static_cast<float>(param.hPos);
         position.v = static_cast<float>(param.vPos);
-
-        // Parameter shortcuts often have a visual indicator - adjust position based on parameter style
-        if (param.ShowsName()) {
-            // If name is shown, adjust to right edge of the name display
-            position.h += GRID_HALF_CELL;
-        }
     } else if (IsOperation(endpoint.id)) {
         // Parameter output on operation
         Operation *operation = GetOperation(endpoint.id);
@@ -957,9 +949,9 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
             return position;
         }
 
-        // Operation outputs come from the bottom
-        position.h = operation->hPos;                                  // Center of the operation
-        position.v = operation->vPos + PARAMETER_LINK_VERTICAL_OFFSET; // Below the operation
+        // Output of operation - center with slight vertical offset
+        position.h = operation->hPos;
+        position.v = operation->vPos + PARAMETER_LINK_VERTICAL_OFFSET;
     } else {
         // Parameter output on behavior
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
@@ -1008,33 +1000,18 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
         position.h = m_Data.header.hStartPos;
         position.v = m_Data.header.vStartPos;
     } else {
-        CKObject *object = m_Context->GetObject(endpoint.id);
-        if (!object) {
-            m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior input",
-                                         endpoint.id);
-            return position; // Safe fallback position
-        }
-
-        // Regular behavior input
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
         if (!behaviorData) {
             m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
             return position;
         }
 
-        // Validate input index - behaviors can have variable numbers of inputs
-        auto *behavior = (CKBehavior *) object;
-        int inputCount = behavior->GetInputCount();
-        if (endpoint.index < 0 || endpoint.index >= inputCount) {
-            m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior input index %d out of bounds (max %d)",
-                                         endpoint.index, inputCount - 1);
-            // Continue with clamped index rather than returning
-        }
-
         // Left side of behavior block
         position.h = behaviorData->rect.hPos - BEHAVIOR_IO_OFFSET;
-        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET +
-            VERTICAL_SPACING * std::min(endpoint.index, std::max(0, inputCount - 1));
+
+        // Ensure we don't go out of bounds
+        int clampedIndex = std::max(0, endpoint.index);
+        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * clampedIndex;
     }
 
     return position;
@@ -1043,33 +1020,18 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
 Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) {
     Point position;
 
-    // First, determine if the element exists before trying to get position
-    CKObject *object = m_Context->GetObject(endpoint.id);
-    if (!object) {
-        m_Context->OutputToConsoleEx((CKSTRING) "Error: Object with ID %d not found for behavior output", endpoint.id);
-        return position; // Safe fallback position
-    }
-
-    // Regular behavior output
     BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
     if (!behaviorData) {
         m_Context->OutputToConsoleEx((CKSTRING) "Error: Behavior data not found for ID %d", endpoint.id);
         return position;
     }
 
-    // Validate output index - behaviors can have variable numbers of outputs
-    auto *behavior = (CKBehavior *) object;
-    int outputCount = behavior->GetOutputCount();
-    if (endpoint.index < 0 || endpoint.index >= outputCount) {
-        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Behavior output index %d out of bounds (max %d)",
-                                     endpoint.index, outputCount - 1);
-        // Continue with clamped index rather than returning
-    }
-
     // Right side of behavior block
     position.h = behaviorData->rect.hPos + behaviorData->rect.hSize + BEHAVIOR_IO_OFFSET;
-    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET +
-        VERTICAL_SPACING * std::min(endpoint.index, std::max(0, outputCount - 1));
+
+    // Ensure we don't go out of bounds
+    int clampedIndex = std::max(0, endpoint.index);
+    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * clampedIndex;
 
     return position;
 }
@@ -1081,10 +1043,6 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     // Add alignment checks
     characteristics.isVerticalAlignment = std::abs(startPos.h - endPos.h) < LINK_MARGIN;
     characteristics.isHorizontalAlignment = std::abs(startPos.v - endPos.v) < LINK_MARGIN;
-    if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
-        // Direct connection for aligned points
-        return {};
-    }
 
     // Choose the appropriate routing strategy
     if (characteristics.isSelfConnection) {
@@ -1093,6 +1051,9 @@ std::vector<Point> LayoutCalculator::CreatePath(const Point &startPos, const Poi
     } else if (characteristics.isStartLink) {
         // Special routing for start point links
         return CreateStartLinkPath(startPos, endPos, characteristics.isHorizontalAlignment);
+    } else if (characteristics.isVerticalAlignment || characteristics.isHorizontalAlignment) {
+        // Direct connection for aligned points
+        return {};
     } else if (characteristics.IsSharedParameterLink()) {
         // Special handling for shared parameter links
         return CreateParameterSharePath(startPos, endPos, link);
