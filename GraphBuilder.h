@@ -216,65 +216,78 @@ private:
     void ConfigureParameterLinks();
 
     /**
-     * Process an input parameter for parameter chain
-     * @param inputParam Input parameter
-     * @param inputChain Input parameter chain
+     * Builds chains of input parameters upwards through the behavior tree.
+     * @param inputChain The map of input parameter IDs to their position chains
      */
-    void ProcessInputParameter(CKParameterIn *inputParam, ParameterChain &inputChain);
+    void BuildInputParameterChains(ParameterChain &inputChain);
 
     /**
-     * Process an output parameter for parameter chain
-     * @param outputParam Output parameter
-     * @param outputChain Output parameter chain
+     * Builds a chain for a single input parameter through the behavior tree.
+     * @param inputParam The input parameter
+     * @param inputChain The map to store the chain in
      */
-    void ProcessOutputParameter(CKParameterOut *outputParam, ParameterChain &outputChain);
+    void BuildInputParameterChain(CKParameterIn *inputParam, ParameterChain &inputChain);
 
     /**
-     * Connects input parameters to their sources
-     * @param inputChain Chain of input parameters
-     * @param outputChain Chain of output parameters
+     * Builds chains of output parameters upwards through the behavior tree.
+     * @param outputChain The map of output parameter IDs to their position chains
      */
-    void ConfigureDirectParameterConnections(const ParameterChain &inputChain, const ParameterChain &outputChain);
+    void BuildOutputParameterChains(ParameterChain &outputChain);
 
     /**
-     * Process a direct source connection for an input parameter
-     * @param inputParam Input parameter
-     * @param sourceParam Source parameter
-     * @param inputPositions Input parameter positions
-     * @param position Parameter position
-     * @param outputChain Output parameter chain
+     * Builds a chain for a single output parameter through the behavior tree.
+     * @param outputParam The output parameter
+     * @param outputChain The map to store the chain in
      */
-    void ProcessDirectSourceConnection(CKParameterIn *inputParam, CKParameter *sourceParam,
-                                       const std::vector<ParameterPosition> &inputPositions,
-                                       const ParameterPosition &position,
-                                       const ParameterChain &outputChain);
+    void BuildOutputParameterChain(CKParameterOut *outputParam, ParameterChain &outputChain);
 
     /**
-     * Try to connect parameters within the same behavior
-     * @param inputPositions Input parameter positions
-     * @param sourcePositions Source parameter positions
-     * @param sourceParam Source parameter
-     * @return True if connection was made
+     * Connects parameter chains to form complete parameter links.
+     * @param inputChain The map of input parameter IDs to their position chains
+     * @param outputChain The map of output parameter IDs to their position chains
      */
-    bool TryConnectWithinSameBehavior(const std::vector<ParameterPosition> &inputPositions,
-                                      const std::vector<ParameterPosition> &sourcePositions,
-                                      CKParameter *sourceParam);
+    void ConnectParameterChains(const ParameterChain &inputChain, const ParameterChain &outputChain);
 
     /**
-     * Create a shortcut connection
-     * @param position Parameter position
-     * @param sourceParam Source parameter
+     * Connects an input parameter to its direct source parameter.
+     * @param inputParam The input parameter to connect
+     * @param sourceParam The source (output) parameter
+     * @param inputPositions The positions of the input parameter in the chain
+     * @param position The initial position of the input parameter
+     * @param outputChain The map of output parameter chains
      */
-    void CreateShortcutConnection(const ParameterPosition &position, CKParameter *sourceParam);
+    void ConnectToDirectSource(CKParameterIn *inputParam, CKParameter *sourceParam,
+                             const std::vector<ParameterPosition> &inputPositions,
+                             const ParameterPosition &position,
+                             const ParameterChain &outputChain);
 
     /**
-     * Process a shared source connection for an input parameter
-     * @param inputParam Input parameter
-     * @param sharedInput Shared input parameter
-     * @param inputPositions Input parameter positions
-     * @param inputChain Input parameter chain
+     * Connects an input parameter to another input parameter it shares with.
+     * @param inputParam The input parameter to connect
+     * @param sharedInput The shared input parameter (another input parameter with the same source)
+     * @param inputPositions The positions of the input parameter in the chain
+     * @param inputChain The map of input parameter chains
      */
-    void ProcessSharedSourceConnection(CKParameterIn *inputParam, CKParameterIn *sharedInput,
-                                       const std::vector<ParameterPosition> &inputPositions,
-                                       const ParameterChain &inputChain);
+    void ConnectToSharedSource(CKParameterIn *inputParam, CKParameterIn *sharedInput,
+                             const std::vector<ParameterPosition> &inputPositions,
+                             const ParameterChain &inputChain);
+
+    /**
+     * Tries to connect parameters within the same behavior.
+     * @param inputPositions The positions of the input parameter
+     * @param sourcePositions The positions of the source parameter
+     * @param sourceParam The source parameter
+     * @return True if a connection was made, false otherwise
+     */
+    bool ConnectParametersInSameBehavior(
+        const std::vector<ParameterPosition> &inputPositions,
+        const std::vector<ParameterPosition> &sourcePositions,
+        CKParameter *sourceParam);
+
+    /**
+     * Creates a parameter shortcut for a connection that can't be made directly.
+     * @param position The position of the input parameter
+     * @param sourceParam The source parameter
+     */
+    void CreateParameterShortcut(const ParameterPosition &position, CKParameter *sourceParam);
 };

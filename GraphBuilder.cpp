@@ -85,6 +85,16 @@ void GraphBuilder::EnqueueSubBehaviors(CKBehavior *behavior, int depth,
     }
 }
 
+BehaviorData &GraphBuilder::GetBehaviorData(CK_ID id) {
+    const int index = m_BehaviorMap[id];
+    return index >= 0 ? m_Data.behaviors[index] : m_Data.rootBehavior;
+}
+
+bool GraphBuilder::IsOperation(CK_ID id) const {
+    CKObject *obj = m_Context->GetObject(id);
+    return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
+}
+
 void GraphBuilder::SetupBehavior(BehaviorData &behaviorData, CKBehavior *behavior, int depth) {
     behaviorData.id = behavior->GetID();
     behaviorData.folded = depth > 0;
@@ -217,102 +227,6 @@ void GraphBuilder::AddLocalParameters(BehaviorData &behaviorData, CKBehavior *be
             Parameter paramData(localParam->GetID(), PARAM_STYLE_CLOSED);
             behaviorData.AddLocalParameter(paramData);
         }
-    }
-}
-
-BehaviorData &GraphBuilder::GetBehaviorData(CK_ID id) {
-    const int index = m_BehaviorMap[id];
-    return index >= 0 ? m_Data.behaviors[index] : m_Data.rootBehavior;
-}
-
-bool GraphBuilder::IsOperation(CK_ID id) const {
-    CKObject *obj = m_Context->GetObject(id);
-    return obj && obj->GetClassID() == CKCID_PARAMETEROPERATION;
-}
-
-void GraphBuilder::ConfigureParameterLinks() {
-    // Maps to track parameter chains
-    ParameterChain inputChain;
-    ParameterChain outputChain;
-
-    // Process input parameters
-    for (const auto &id : m_InputParams) {
-        auto *inputParam = (CKParameterIn *) m_Context->GetObject(id);
-        if (inputParam) {
-            ProcessInputParameter(inputParam, inputChain);
-        }
-    }
-
-    // Process output parameters
-    for (const auto &id : m_OutputParams) {
-        auto *outputParam = (CKParameterOut *) m_Context->GetObject(id);
-        if (outputParam) {
-            ProcessOutputParameter(outputParam, outputChain);
-        }
-    }
-
-    // Connect parameter chains
-    ConfigureDirectParameterConnections(inputChain, outputChain);
-}
-
-void GraphBuilder::ProcessInputParameter(CKParameterIn *inputParam, ParameterChain &inputChain) {
-    CKBehavior *beh = nullptr;
-    try {
-        auto &positionChain = inputChain[inputParam->GetID()];
-        positionChain.push_back(GetInputParameterPosition(inputParam, &beh));
-
-        LinkEndpoint lastEndpoint = {
-            positionChain.back().id,
-            positionChain.back().index,
-            positionChain.back().index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
-        };
-
-        // Create chain of links for input parameters
-        while (beh && beh->GetInputParameterPosition(inputParam) != -1) {
-            positionChain.push_back({
-                beh->GetID(),
-                beh->GetInputParameterPosition(inputParam),
-                beh->GetParent()->GetID()
-            });
-
-            const LinkEndpoint start = {positionChain.back().id, positionChain.back().index, ENDPOINT_PIN};
-            Link link(0, LINK_TYPE_PARAMETER_OP, start, lastEndpoint);
-            lastEndpoint = start;
-
-            GetBehaviorData(beh->GetID()).AddLink(link);
-            beh = beh->GetParent();
-        }
-    } catch (const std::exception &e) {
-        m_Context->OutputToConsoleEx((CKSTRING) "Error processing input parameter %d: %s", inputParam->GetID(), e.what());
-    }
-}
-
-void GraphBuilder::ProcessOutputParameter(CKParameterOut *outputParam, ParameterChain &outputChain) {
-    CKBehavior *beh = nullptr;
-    try {
-        auto &positionChain = outputChain[outputParam->GetID()];
-        positionChain.push_back(GetOutputParameterPosition(outputParam, &beh));
-
-        LinkEndpoint lastEndpoint = {positionChain.back().id, positionChain.back().index, ENDPOINT_POUT};
-
-        // Create chain of links for output parameters
-        while (beh && beh->GetOutputParameterPosition(outputParam) != -1) {
-            positionChain.push_back({
-                beh->GetID(),
-                beh->GetOutputParameterPosition(outputParam),
-                beh->GetParent()->GetID()
-            });
-
-            const LinkEndpoint end = {positionChain.back().id, positionChain.back().index, ENDPOINT_POUT};
-            Link link(0, LINK_TYPE_PARAMETER_OP, lastEndpoint, end);
-            lastEndpoint = end;
-
-            GetBehaviorData(beh->GetID()).AddLink(link);
-            beh = beh->GetParent();
-        }
-    } catch (const std::exception &e) {
-        m_Context->OutputToConsoleEx((CKSTRING) "Error processing output parameter %d: %s",
-                                     outputParam->GetID(), e.what());
     }
 }
 
@@ -454,9 +368,166 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     return {behaviorId, static_cast<int>(behaviorData.sharedParams.size()) - 1, behaviorId};
 }
 
-void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inputChain,
-                                                       const ParameterChain &outputChain) {
-    // Connect input parameters to their sources
+/**
+ * Configures all parameter links in the behavior tree.
+ * This method establishes connections between parameters across different levels
+ * of the behavior hierarchy by:
+ * 1. Building chains of input parameters upwards through the behavior tree
+ * 2. Building chains of output parameters upwards through the behavior tree
+ * 3. Connecting these chains to form complete parameter links
+ */
+void GraphBuilder::ConfigureParameterLinks() {
+    // Maps of parameter IDs to their position chains in the behavior tree
+    ParameterChain inputChain;
+    ParameterChain outputChain;
+
+    // First phase: Build input parameter chains
+    BuildInputParameterChains(inputChain);
+
+    // Second phase: Build output parameter chains
+    BuildOutputParameterChains(outputChain);
+
+    // Third phase: Connect parameter chains
+    ConnectParameterChains(inputChain, outputChain);
+}
+
+/**
+ * Builds chains of input parameters upwards through the behavior tree.
+ * Each chain represents how an input parameter propagates up through parent behaviors.
+ *
+ * @param inputChain The map of input parameter IDs to their position chains
+ */
+void GraphBuilder::BuildInputParameterChains(ParameterChain &inputChain) {
+    for (const auto &id : m_InputParams) {
+        auto *inputParam = (CKParameterIn *) m_Context->GetObject(id);
+        if (inputParam) {
+            try {
+                BuildInputParameterChain(inputParam, inputChain);
+            } catch (const std::exception &e) {
+                m_Context->OutputToConsoleEx((CKSTRING) "Error building input parameter chain for %d: %s",
+                                             id, e.what());
+            }
+        }
+    }
+}
+
+/**
+ * Builds a chain for a single input parameter through the behavior tree.
+ *
+ * @param inputParam The input parameter
+ * @param inputChain The map to store the chain in
+ */
+void GraphBuilder::BuildInputParameterChain(CKParameterIn *inputParam, ParameterChain &inputChain) {
+    CKBehavior *beh = nullptr;
+    auto &positionChain = inputChain[inputParam->GetID()];
+
+    // Get the initial position of this parameter
+    positionChain.push_back(GetInputParameterPosition(inputParam, &beh));
+
+    // Create the endpoint for the parameter
+    LinkEndpoint lastEndpoint = {
+        positionChain.back().id,
+        positionChain.back().index,
+        positionChain.back().index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN,
+    };
+
+    // Follow the parameter up through parent behaviors and create links
+    while (beh && beh->GetInputParameterPosition(inputParam) != -1) {
+        // Add parent behavior's position for this parameter to the chain
+        positionChain.push_back({
+            beh->GetID(),
+            beh->GetInputParameterPosition(inputParam),
+            beh->GetParent()->GetID()
+        });
+
+        // Create a link connecting this parameter to its parent behavior's input
+        const LinkEndpoint start = {
+            positionChain.back().id,
+            positionChain.back().index,
+            ENDPOINT_PIN
+        };
+
+        Link link(0, LINK_TYPE_PARAMETER_OP, start, lastEndpoint);
+        lastEndpoint = start;
+
+        GetBehaviorData(beh->GetID()).AddLink(link);
+        beh = beh->GetParent();
+    }
+}
+
+/**
+ * Builds chains of output parameters upwards through the behavior tree.
+ * Each chain represents how an output parameter propagates up through parent behaviors.
+ *
+ * @param outputChain The map of output parameter IDs to their position chains
+ */
+void GraphBuilder::BuildOutputParameterChains(ParameterChain &outputChain) {
+    for (const auto &id : m_OutputParams) {
+        auto *outputParam = (CKParameterOut *) m_Context->GetObject(id);
+        if (outputParam) {
+            try {
+                BuildOutputParameterChain(outputParam, outputChain);
+            } catch (const std::exception &e) {
+                m_Context->OutputToConsoleEx((CKSTRING) "Error building output parameter chain for %d: %s",
+                                             id, e.what());
+            }
+        }
+    }
+}
+
+/**
+ * Builds a chain for a single output parameter through the behavior tree.
+ *
+ * @param outputParam The output parameter
+ * @param outputChain The map to store the chain in
+ */
+void GraphBuilder::BuildOutputParameterChain(CKParameterOut *outputParam, ParameterChain &outputChain) {
+    CKBehavior *beh = nullptr;
+    auto &positionChain = outputChain[outputParam->GetID()];
+
+    // Get the initial position of this parameter
+    positionChain.push_back(GetOutputParameterPosition(outputParam, &beh));
+
+    // Create the endpoint for the parameter
+    LinkEndpoint lastEndpoint = {
+        positionChain.back().id,
+        positionChain.back().index,
+        ENDPOINT_POUT
+    };
+
+    // Follow the parameter up through parent behaviors and create links
+    while (beh && beh->GetOutputParameterPosition(outputParam) != -1) {
+        // Add parent behavior's position for this parameter to the chain
+        positionChain.push_back({
+            beh->GetID(),
+            beh->GetOutputParameterPosition(outputParam),
+            beh->GetParent()->GetID()
+        });
+
+        // Create a link connecting this parameter to its parent behavior's output
+        const LinkEndpoint end = {
+            positionChain.back().id,
+            positionChain.back().index,
+            ENDPOINT_POUT,
+        };
+
+        Link link(0, LINK_TYPE_PARAMETER_OP, lastEndpoint, end);
+        lastEndpoint = end;
+
+        GetBehaviorData(beh->GetID()).AddLink(link);
+        beh = beh->GetParent();
+    }
+}
+
+/**
+ * Connects parameter chains to form complete parameter links.
+ * This phase links input parameters to their sources, either directly
+ * or through shared parameter connections.
+ *
+ * @param inputChain The map of input parameter IDs to their position chains
+ * @param outputChain The map of output parameter IDs to their position chains
+ */
+void GraphBuilder::ConnectParameterChains(const ParameterChain &inputChain, const ParameterChain &outputChain) {
     for (const auto &id : m_InputParams) {
         auto *inputParam = (CKParameterIn *) m_Context->GetObject(id);
         if (!inputParam) continue;
@@ -465,33 +536,43 @@ void GraphBuilder::ConfigureDirectParameterConnections(const ParameterChain &inp
             CKBehavior *beh = nullptr;
             auto position = GetInputParameterPosition(inputParam, &beh);
 
-            // Find the input positions in the chain
+            // Find this parameter's positions in the chain
             auto inputIt = inputChain.find(inputParam->GetID());
             if (inputIt == inputChain.end()) continue;
             const auto &inputPositions = inputIt->second;
 
-            // Direct source connection
+            // Handle direct source connections (parameter is connected to an output)
             if (CKParameter *sourceParam = inputParam->GetDirectSource()) {
-                ProcessDirectSourceConnection(inputParam, sourceParam, inputPositions, position, outputChain);
+                ConnectToDirectSource(inputParam, sourceParam, inputPositions, position, outputChain);
             }
-            // Shared source connection
+            // Handle shared source connections (parameter is shared with another input)
             else if (CKParameterIn *sharedInput = inputParam->GetSharedSource()) {
-                ProcessSharedSourceConnection(inputParam, sharedInput, inputPositions, inputChain);
+                ConnectToSharedSource(inputParam, sharedInput, inputPositions, inputChain);
             }
         } catch (const std::exception &e) {
-            m_Context->OutputToConsoleEx((CKSTRING) "Error connecting input parameter %d: %s", id, e.what());
+            m_Context->OutputToConsoleEx((CKSTRING) "Error connecting parameter %d: %s", id, e.what());
         }
     }
 }
 
-void GraphBuilder::ProcessDirectSourceConnection(CKParameterIn *inputParam, CKParameter *sourceParam,
-                                                 const std::vector<ParameterPosition> &inputPositions,
-                                                 const ParameterPosition &position,
-                                                 const ParameterChain &outputChain) {
-    // Find source positions
-    auto sourceIt = outputChain.find(sourceParam->GetID());
+/**
+ * Connects an input parameter to its direct source parameter.
+ * This establishes a link between an output parameter and an input parameter.
+ *
+ * @param inputParam The input parameter to connect
+ * @param sourceParam The source (output) parameter
+ * @param inputPositions The positions of the input parameter in the chain
+ * @param position The initial position of the input parameter
+ * @param outputChain The map of output parameter chains
+ */
+void GraphBuilder::ConnectToDirectSource(CKParameterIn *inputParam, CKParameter *sourceParam,
+                                         const std::vector<ParameterPosition> &inputPositions,
+                                         const ParameterPosition &position,
+                                         const ParameterChain &outputChain) {
+    // Find the source parameter's positions in the chain
     std::vector<ParameterPosition> sourcePositions;
 
+    auto sourceIt = outputChain.find(sourceParam->GetID());
     if (sourceIt != outputChain.end()) {
         sourcePositions = sourceIt->second;
     } else if (sourceParam->GetClassID() == CKCID_PARAMETERLOCAL) {
@@ -499,30 +580,130 @@ void GraphBuilder::ProcessDirectSourceConnection(CKParameterIn *inputParam, CKPa
         sourcePositions.push_back(GetLocalParameterPosition((CKParameterLocal *) sourceParam));
     }
 
-    bool connected = TryConnectWithinSameBehavior(inputPositions, sourcePositions, sourceParam);
+    // Try to connect within the same behavior first
+    bool connected = ConnectParametersInSameBehavior(inputPositions, sourcePositions, sourceParam);
 
-    // Use shortcut if no direct connection
+    // If direct connection failed, create a shortcut connection
     if (!connected) {
-        CreateShortcutConnection(position, sourceParam);
+        CreateParameterShortcut(position, sourceParam);
     }
 }
 
-bool GraphBuilder::TryConnectWithinSameBehavior(const std::vector<ParameterPosition> &inputPositions,
-                                                const std::vector<ParameterPosition> &sourcePositions,
-                                                CKParameter *sourceParam) {
+/**
+ * Connects an input parameter to another input parameter it shares with.
+ * This establishes a link between two input parameters that share the same source.
+ *
+ * @param inputParam The input parameter to connect
+ * @param sharedInput The shared input parameter (another input parameter with the same source)
+ * @param inputPositions The positions of the input parameter in the chain
+ * @param inputChain The map of input parameter chains
+ */
+void GraphBuilder::ConnectToSharedSource(CKParameterIn *inputParam, CKParameterIn *sharedInput,
+                                         const std::vector<ParameterPosition> &inputPositions,
+                                         const ParameterChain &inputChain) {
+    if (sharedInput->GetOwner()->GetClassID() != CKCID_BEHAVIOR) {
+        throw std::runtime_error("Shared input owner is not a behavior");
+    }
+
+    // Find the shared input's positions in the chain
+    auto sharedIt = inputChain.find(sharedInput->GetID());
+    if (sharedIt == inputChain.end()) return;
+    const auto &sharedInputPositions = sharedIt->second;
+
+    bool connected = false;
+
+    // Try to connect within the same behavior
     for (const auto &inputPos : inputPositions) {
-        for (const auto &sourcePos : sourcePositions) {
-            if (inputPos.behaviorId == sourcePos.behaviorId) {
+        for (const auto &sharedPos : sharedInputPositions) {
+            if (inputPos.behaviorId == sharedPos.id) {
+                // Create a link from the shared input to this input
                 LinkEndpoint start = {
-                    sourcePos.id,
-                    sourcePos.index,
-                    sourceParam->GetClassID() == CKCID_PARAMETERLOCAL ? ENDPOINT_PLOCAL : ENDPOINT_POUT
+                    sharedPos.id,
+                    sharedPos.index,
+                    ENDPOINT_PIN
                 };
+
                 LinkEndpoint end = {
                     inputPos.id,
                     inputPos.index,
                     inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
                 };
+
+                Link link(0, LINK_TYPE_PARAMETER, start, end);
+                GetBehaviorData(inputPos.behaviorId).AddLink(link);
+                connected = true;
+                break;
+            }
+        }
+        if (connected) break;
+    }
+
+    // If no direct connection was possible, try to find a common parent
+    if (!connected) {
+        auto *sharedOwner = (CKBehavior *) sharedInput->GetOwner();
+        auto *inputOwner = (CKBehavior *) inputParam->GetOwner();
+
+        if (sharedOwner->GetParent() && inputOwner->GetParent() &&
+            sharedOwner->GetParent()->GetID() == inputOwner->GetParent()->GetID()) {
+            // Create shortcuts in the common parent behavior
+            CK_ID parentId = sharedOwner->GetParent()->GetID();
+
+            auto sharedShortcutPos = GetShortcutParameterPosition(parentId, sharedInput->GetID());
+            auto inputShortcutPos = GetShortcutParameterPosition(parentId, inputParam->GetID());
+
+            // Create link between shortcuts
+            LinkEndpoint start = {
+                parentId,
+                sharedShortcutPos.index,
+                ENDPOINT_POUT_SHORTCUT
+            };
+
+            LinkEndpoint end = {
+                parentId,
+                inputShortcutPos.index,
+                ENDPOINT_PIN
+            };
+
+            Link link(0, LINK_TYPE_PARAMETER, start, end);
+            GetBehaviorData(parentId).AddLink(link);
+            connected = true;
+        }
+    }
+
+    if (!connected) {
+        m_Context->OutputToConsoleEx((CKSTRING) "Cannot connect shared parameters %d <-> %d, source type is %d",
+                                     inputParam->GetID(), sharedInput->GetID(), sharedInput->GetClassID());
+    }
+}
+
+/**
+ * Tries to connect parameters within the same behavior.
+ *
+ * @param inputPositions The positions of the input parameter
+ * @param sourcePositions The positions of the source parameter
+ * @param sourceParam The source parameter
+ * @return True if a connection was made, false otherwise
+ */
+bool GraphBuilder::ConnectParametersInSameBehavior(
+    const std::vector<ParameterPosition> &inputPositions,
+    const std::vector<ParameterPosition> &sourcePositions,
+    CKParameter *sourceParam) {
+    for (const auto &inputPos : inputPositions) {
+        for (const auto &sourcePos : sourcePositions) {
+            if (inputPos.behaviorId == sourcePos.behaviorId) {
+                // Create a direct link within the same behavior
+                LinkEndpoint start = {
+                    sourcePos.id,
+                    sourcePos.index,
+                    sourceParam->GetClassID() == CKCID_PARAMETERLOCAL ? ENDPOINT_PLOCAL : ENDPOINT_POUT
+                };
+
+                LinkEndpoint end = {
+                    inputPos.id,
+                    inputPos.index,
+                    inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
+                };
+
                 Link link(0, LINK_TYPE_PARAMETER, start, end);
                 GetBehaviorData(inputPos.behaviorId).AddLink(link);
                 return true;
@@ -532,51 +713,27 @@ bool GraphBuilder::TryConnectWithinSameBehavior(const std::vector<ParameterPosit
     return false;
 }
 
-void GraphBuilder::CreateShortcutConnection(const ParameterPosition &position, CKParameter *sourceParam) {
+/**
+ * Creates a parameter shortcut for a connection that can't be made directly.
+ *
+ * @param position The position of the input parameter
+ * @param sourceParam The source parameter
+ */
+void GraphBuilder::CreateParameterShortcut(const ParameterPosition &position, CKParameter *sourceParam) {
     auto shortcutPos = GetShortcutParameterPosition(position.behaviorId, sourceParam->GetID());
-    LinkEndpoint start = {position.behaviorId, shortcutPos.index, ENDPOINT_POUT_SHORTCUT};
+
+    LinkEndpoint start = {
+        position.behaviorId,
+        shortcutPos.index,
+        ENDPOINT_POUT_SHORTCUT
+    };
+
     LinkEndpoint end = {
-        position.id, position.index,
+        position.id,
+        position.index,
         position.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
     };
+
     Link link = {0, LINK_TYPE_PARAMETER, start, end};
     GetBehaviorData(position.behaviorId).AddLink(link);
-}
-
-void GraphBuilder::ProcessSharedSourceConnection(CKParameterIn *inputParam, CKParameterIn *sharedInput,
-                                                 const std::vector<ParameterPosition> &inputPositions,
-                                                 const ParameterChain &inputChain) {
-    if (sharedInput->GetOwner()->GetClassID() != CKCID_BEHAVIOR) {
-        throw std::runtime_error("Shared input owner is not a behavior");
-    }
-
-    auto sharedIt = inputChain.find(sharedInput->GetID());
-    if (sharedIt == inputChain.end()) return;
-
-    const auto &sharedInputPositions = sharedIt->second;
-    bool connected = false;
-
-    // Find connection between input and shared source
-    for (const auto &inputPos : inputPositions) {
-        for (const auto &sharedPos : sharedInputPositions) {
-            if (inputPos.behaviorId == sharedPos.id) {
-                LinkEndpoint start = {sharedPos.id, sharedPos.index, ENDPOINT_PIN};
-                LinkEndpoint end = {
-                    inputPos.id,
-                    inputPos.index,
-                    inputPos.index == -2 ? ENDPOINT_TARGET_PIN : ENDPOINT_PIN
-                };
-                Link link = {0, LINK_TYPE_PARAMETER, start, end};
-                GetBehaviorData(inputPos.behaviorId).AddLink(link);
-                connected = true;
-                break;
-            }
-        }
-        if (connected) break;
-    }
-
-    if (!connected) {
-        m_Context->OutputToConsoleEx((CKSTRING) "pin: can't connect %d <-> %d, source type is %d",
-                                     inputParam->GetID(), sharedInput->GetID(), sharedInput->GetClassID());
-    }
 }
