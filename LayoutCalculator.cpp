@@ -153,10 +153,10 @@ void LayoutCalculator::FinalizeScriptLayout(CKBehavior *script) {
         requiredSize.vSize = std::max(totalHeight, VERTICAL_SPACING * 5.0f);
     }
 
-    float behaviorHeight = requiredSize.vSize + EXPANSION_PADDING * VERTICAL_SPACING;
+    float behaviorHeight = requiredSize.vSize + VERTICAL_SPACING * EXPANSION_PADDING;
 
     // Calculate the vertical center position for the start point
-    float startVertical = behaviorHeight / 2.0f;
+    float startVertical = (behaviorHeight - VERTICAL_SPACING) / 2.0f;
 
     // Set start information and recalculate positions
     SetStart(m_Data.rootBehavior, startVertical, behaviorHeight);
