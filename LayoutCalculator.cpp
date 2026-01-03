@@ -525,12 +525,12 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
             m_PredecessorEdge[targetId] == edgeIndex) {
             const Rect &childSize = m_RequiredSize[targetId];
 
-            // Calculate horizontal position based on parent type
+            // Calculate horizontal position based on parent type (BEHAVIOR_PADDING is already pixels)
             float childHorizontalPos;
             if (isRoot) {
                 childHorizontalPos = hPos + HORIZONTAL_SPACING;
             } else {
-                childHorizontalPos = hPos + behaviorData.rect.hSize + HORIZONTAL_SPACING * BEHAVIOR_PADDING;
+                childHorizontalPos = hPos + behaviorData.rect.hSize + BEHAVIOR_PADDING;
             }
 
             // Place the child behavior
@@ -541,8 +541,8 @@ void LayoutCalculator::PlaceBehaviorInParent(BehaviorData &behaviorData, float h
                 false
             );
 
-            // Update vertical offset for next child
-            currentVerticalOffset += childSize.vSize + VERTICAL_SPACING * BEHAVIOR_PADDING;
+            // Update vertical offset for next child (BEHAVIOR_PADDING is already pixels)
+            currentVerticalOffset += childSize.vSize + BEHAVIOR_PADDING;
             childCount++;
         }
     }
@@ -565,15 +565,13 @@ float LayoutCalculator::CalculateBehaviorPositions(BehaviorData &behaviorGraph, 
     behaviorGraph.hExpandSize = size.hSize + HORIZONTAL_SPACING * EXPANSION_PADDING;
     behaviorGraph.vExpandSize = size.vSize + VERTICAL_SPACING * EXPANSION_PADDING;
 
-    // Place behaviors within the graph
-    float horizontalOffset = isScript
-                                 ? HORIZONTAL_SPACING * BEHAVIOR_H_START_OFFSET
-                                 : HORIZONTAL_SPACING * BEHAVIOR_PADDING;
+    // Place behaviors within the graph (constants are already in pixels)
+    float horizontalOffset = isScript ? BEHAVIOR_H_START_OFFSET : BEHAVIOR_PADDING;
 
     PlaceBehaviorInParent(
         behaviorGraph,
         horizontalOffset,
-        VERTICAL_SPACING * BEHAVIOR_V_START_OFFSET,
+        BEHAVIOR_V_START_OFFSET,
         true
     );
 
@@ -613,6 +611,23 @@ void LayoutCalculator::RecalculateAbsolutePositions(BehaviorData &behaviorData, 
             op.hPos += behaviorData.rect.hPos;
             op.vPos += behaviorData.rect.vPos;
         }
+
+        // Process parameters (stored as int grid indices)
+        // Parameters are positioned in the local coordinate space of the behavior graph,
+        // but serialized as integer (col,row) indices in the 20px grid. When converting
+        // to absolute space, translate them by the parent's pixel offset expressed in grid units.
+        const int dx = static_cast<int>(std::lround(behaviorData.rect.hPos / HORIZONTAL_SPACING));
+        const int dy = static_cast<int>(std::lround(behaviorData.rect.vPos / VERTICAL_SPACING));
+
+        for (auto &param : behaviorData.localParams) {
+            param.hPos += dx;
+            param.vPos += dy;
+        }
+
+        for (auto &param : behaviorData.sharedParams) {
+            param.hPos += dx;
+            param.vPos += dy;
+        }
     }
 }
 
@@ -627,40 +642,49 @@ void LayoutCalculator::SetStart(BehaviorData &script, float verticalStartPos, fl
 //------------------------------------------------------
 // Operation and Parameter Layout
 //------------------------------------------------------
+// UNIFIED PIXEL COORDINATE SYSTEM:
+// - All functions use PIXEL coordinates
+// - Parameter: serialized as int grid indices (col/row) in 20px grid
+// - Operation: stored as float pixels, snapped to 20.0 grid
+// - Binary-verified snap formula: (int)((rel - grid*0.5) / grid + 1) * grid
+//------------------------------------------------------
 
-void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, const Point &position) {
-    // Ensure position is valid (not NaN or infinity)
-    if (std::isfinite(position.h) && std::isfinite(position.v)) {
-        parameter.hPos = static_cast<int>(roundf(position.h));
-        parameter.vPos = static_cast<int>(roundf(position.v));
+void LayoutCalculator::MoveParameterToPosition(Parameter &parameter, const Point &pixelPos) {
+    // Input: pixel coordinates
+    // Output: integer (col,row) grid indices in 20px grid (binary-accurate serialization)
+    if (std::isfinite(pixelPos.h) && std::isfinite(pixelPos.v)) {
+        parameter.hPos = static_cast<int>(std::lround(pixelPos.h / HORIZONTAL_SPACING));
+        parameter.vPos = static_cast<int>(std::lround(pixelPos.v / VERTICAL_SPACING));
     } else {
-        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Invalid parameter position (%f, %f)", position.h, position.v);
+        m_Context->OutputToConsoleEx((CKSTRING) "Warning: Invalid parameter position (%f, %f)", pixelPos.h, pixelPos.v);
     }
 }
 
-void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point &position) {
-    operation.hPos = (position.h - OPERATION_H_OFFSET) * HORIZONTAL_SPACING;
-    operation.vPos = (position.v - OPERATION_V_OFFSET) * VERTICAL_SPACING;
+void LayoutCalculator::MoveOperationToPosition(Operation &operation, const Point &pixelPos) {
+    // Input: pixel coordinates (target position for operation's input)
+    // Output: float pixels snapped to 20.0 grid
+    operation.hPos = SnapToGrid(pixelPos.h, HORIZONTAL_SPACING);
+    operation.vPos = SnapToGrid(pixelPos.v, VERTICAL_SPACING);
 }
 
 Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
+    // Returns PIXEL coordinates for input parameter position
     Point position;
 
-    // Handle operation
     if (IsOperation(targetId)) {
         Operation *operation = GetOperation(targetId);
         if (operation) {
-            position.h = roundf(operation->hPos / HORIZONTAL_SPACING) + inputIndex * 2;
-            position.v = roundf(operation->vPos / VERTICAL_SPACING);
+            // Operation input parameters: horizontal offset by index * 2 * spacing
+            position.h = operation->hPos + static_cast<float>(inputIndex) * HORIZONTAL_SPACING * 2.0f;
+            position.v = operation->vPos;
         }
     } else {
-        // Handle behavior
         BehaviorData *behaviorData = GetBehaviorData(targetId);
         if (behaviorData) {
-            float horizontalPos = roundf(behaviorData->rect.hPos / HORIZONTAL_SPACING);
-            float verticalPos = roundf(behaviorData->rect.vPos / VERTICAL_SPACING);
-            position.h = horizontalPos + static_cast<float>(inputIndex);
-            position.v = verticalPos - 1.0f;
+            // Behavior input parameters: above the behavior block
+            float offset = behaviorData->isUsingTarget ? HORIZONTAL_SPACING : GRID_HALF_CELL;
+            position.h = behaviorData->rect.hPos + offset + HORIZONTAL_SPACING * static_cast<float>(inputIndex);
+            position.v = behaviorData->rect.vPos - HORIZONTAL_SPACING;  // One grid cell above
         }
     }
 
@@ -668,23 +692,23 @@ Point LayoutCalculator::GetInputParamPosition(CK_ID targetId, int inputIndex) {
 }
 
 Point LayoutCalculator::GetOutputParamPosition(CK_ID targetId, int outputIndex) {
+    // Returns PIXEL coordinates for output parameter position
     Point position;
 
-    // Handle operation
     if (IsOperation(targetId)) {
         Operation *operation = GetOperation(targetId);
         if (operation) {
-            position.h = roundf(operation->hPos / HORIZONTAL_SPACING) + 1;
-            position.v = roundf(operation->vPos / VERTICAL_SPACING) + 2;
+            // Operation output: below the operation
+            position.h = operation->hPos + HORIZONTAL_SPACING;
+            position.v = operation->vPos + HORIZONTAL_SPACING * 2.0f;
         }
     } else {
-        // Handle behavior
         BehaviorData *behaviorData = GetBehaviorData(targetId);
         if (behaviorData) {
-            float horizontalPos = roundf(behaviorData->rect.hPos / HORIZONTAL_SPACING);
-            float verticalPos = roundf(behaviorData->rect.vPos / VERTICAL_SPACING);
-            position.h = horizontalPos + static_cast<float>(outputIndex);
-            position.v = verticalPos + roundf(behaviorData->rect.vSize / VERTICAL_SPACING) + 1;
+            // Behavior output parameters: below the behavior block
+            float offset = behaviorData->isUsingTarget ? HORIZONTAL_SPACING : GRID_HALF_CELL;
+            position.h = behaviorData->rect.hPos + offset + HORIZONTAL_SPACING * static_cast<float>(outputIndex);
+            position.v = behaviorData->rect.vPos + behaviorData->rect.vSize + HORIZONTAL_SPACING;
         }
     }
 
@@ -939,8 +963,8 @@ Point LayoutCalculator::GetParameterOutputPosition(const LinkEndpoint &endpoint)
 
         // Get the parameter position
         Parameter &param = behaviorData->sharedParams[endpoint.index];
-        position.h = static_cast<float>(param.hPos);
-        position.v = static_cast<float>(param.vPos);
+        position.h = static_cast<float>(param.hPos) * HORIZONTAL_SPACING;
+        position.v = static_cast<float>(param.vPos) * VERTICAL_SPACING;
     } else if (IsOperation(endpoint.id)) {
         // Parameter output on operation
         Operation *operation = GetOperation(endpoint.id);
@@ -986,8 +1010,8 @@ Point LayoutCalculator::GetLocalParameterPosition(const LinkEndpoint &endpoint) 
 
     // Get exact parameter position
     const Parameter &param = behaviorData->localParams[endpoint.index];
-    position.h = static_cast<float>(param.hPos);
-    position.v = static_cast<float>(param.vPos);
+    position.h = static_cast<float>(param.hPos) * HORIZONTAL_SPACING;
+    position.v = static_cast<float>(param.vPos) * VERTICAL_SPACING;
 
     return position;
 }
@@ -997,7 +1021,8 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
 
     if (endpoint.IsStartBehaviorInput()) {
         // Start behavior input is special - comes from script header
-        position.h = m_Data.header.hStartPos;
+        // Binary-accurate: start point comes from header, shifted left by one grid cell
+        position.h = m_Data.header.hStartPos - HORIZONTAL_SPACING;
         position.v = m_Data.header.vStartPos;
     } else {
         BehaviorData *behaviorData = GetBehaviorData(endpoint.id);
@@ -1009,9 +1034,9 @@ Point LayoutCalculator::GetBehaviorInputPosition(const LinkEndpoint &endpoint) {
         // Left side of behavior block
         position.h = behaviorData->rect.hPos - BEHAVIOR_IO_OFFSET;
 
-        // Ensure we don't go out of bounds
+        // Binary-accurate Y: vPos + spacing * index + IO_Y_OFFSET (-5px)
         int clampedIndex = std::max(0, endpoint.index);
-        position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * clampedIndex;
+        position.v = behaviorData->rect.vPos + VERTICAL_SPACING * clampedIndex + BEHAVIOR_IO_Y_OFFSET;
     }
 
     return position;
@@ -1029,9 +1054,9 @@ Point LayoutCalculator::GetBehaviorOutputPosition(const LinkEndpoint &endpoint) 
     // Right side of behavior block
     position.h = behaviorData->rect.hPos + behaviorData->rect.hSize + BEHAVIOR_IO_OFFSET;
 
-    // Ensure we don't go out of bounds
+    // Binary-accurate Y: vPos + spacing * index + IO_Y_OFFSET (-5px)
     int clampedIndex = std::max(0, endpoint.index);
-    position.v = behaviorData->rect.vPos + BEHAVIOR_TOP_OFFSET + VERTICAL_SPACING * clampedIndex;
+    position.v = behaviorData->rect.vPos + VERTICAL_SPACING * clampedIndex + BEHAVIOR_IO_Y_OFFSET;
 
     return position;
 }

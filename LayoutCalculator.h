@@ -30,34 +30,68 @@ public:
     void CalculateLayout(CKBehavior *script);
 
 private:
-    // Layout constants
+    //==============================================================================
+    // COORDINATE SYSTEM (Binary-Verified)
+    //==============================================================================
+    // Public layout API and all geometry calculations use PIXEL coordinates.
+    // Note: parameter positions are serialized as integer grid indices (col/row) in the 20px grid.
+    // This means parameters require an explicit boundary conversion:
+    //   pixel = index * 20.0 (+ origin/parent offset when applicable)
+    //
+    // Storage formats:
+    //   - Operation.hPos/vPos: float pixels, snapped to 20.0 grid
+    //   - Parameter.hPos/vPos: int grid indices (col/row) in 20.0 grid (NOT pixels)
+    //   - Behavior rect: float pixels
+    //
+    // Binary-verified snap formula (from sub_4D8400):
+    //   snapped = (int)((rel - grid*0.5) / grid + 1) * grid + base
+    //
+    // See docs/RE/algorithm-analysis.md Section 6 for details.
+    //==============================================================================
+
+    // Layout constants - All in PIXELS (Binary addresses from algorithm-analysis.md)
     static constexpr int MAX_FIX_STACK_OPS = 3;
-    static constexpr float HORIZONTAL_SPACING = 20.0f;
-    static constexpr float VERTICAL_SPACING = 20.0f;
-    static constexpr float LINK_MARGIN = 10.0f;
+    static constexpr float HORIZONTAL_SPACING = 20.0f;  // g_fHorizontalSpacing @ 0x642B0C
+    static constexpr float VERTICAL_SPACING = 20.0f;    // g_fVerticalSpacing @ 0x642B10
+    static constexpr float LINK_MARGIN = 10.0f;         // g_fLinkMargin @ 0x60D124
 
-    // Grid constants
-    static constexpr float GRID_HALF_CELL = HORIZONTAL_SPACING / 2.0f;
-    static constexpr float GRID_QUARTER_CELL = HORIZONTAL_SPACING / 4.0f;
+    // Parameter grid scale (binary-verified: parameters use 0.2 scale)
+    static constexpr float PARAMETER_SCALE = 0.2f;                              // 0x3E4CCCCD
+    static constexpr float PARAMETER_GRID_SIZE = HORIZONTAL_SPACING * PARAMETER_SCALE;  // 4.0 px (UI snap only; NOT used for param serialization)
 
-    // Position adjustment constants
-    static constexpr float OPERATION_H_OFFSET = 1.0f;
-    static constexpr float OPERATION_V_OFFSET = 2.0f;
-    static constexpr float BEHAVIOR_H_START_OFFSET = 9.0f; // 7 + 2
-    static constexpr float BEHAVIOR_V_START_OFFSET = 2.0f;
-    static constexpr float BEHAVIOR_PADDING = 2.0f;
+    // Grid helper constants (in pixels)
+    static constexpr float GRID_HALF_CELL = HORIZONTAL_SPACING / 2.0f;     // 10.0 px
+    static constexpr float GRID_QUARTER_CELL = HORIZONTAL_SPACING / 4.0f;  // 5.0 px
 
-    // Link routing constants
+    // Behavior IO offset (binary-verified)
+    // Binary uses subtraction: y -= g_fIOYOffset (5.0). Represented here as an additive constant.
+    static constexpr float BEHAVIOR_IO_Y_OFFSET = -5.0f;  // -g_fIOYOffset @ 0x60D160
+
+    // Layout positioning constants (in pixels)
+    static constexpr float BEHAVIOR_H_START_OFFSET = 9.0f * HORIZONTAL_SPACING;  // 180.0 px
+    static constexpr float BEHAVIOR_V_START_OFFSET = 2.0f * VERTICAL_SPACING;    // 40.0 px
+    static constexpr float BEHAVIOR_PADDING = 2.0f * HORIZONTAL_SPACING;         // 40.0 px
+
+    // Link routing constants (in pixels)
     static constexpr float LOOP_SIZE = 30.0f;
-    static constexpr float BEHAVIOR_IO_OFFSET = VERTICAL_SPACING / 2.0f;
-    static constexpr float BEHAVIOR_TOP_OFFSET = VERTICAL_SPACING / 2.0f;
-    static constexpr float BEHAVIOR_BOTTOM_OFFSET = VERTICAL_SPACING / 2.0f;
-    static constexpr float PARAMETER_LINK_VERTICAL_OFFSET = VERTICAL_SPACING;
-    static constexpr float PARAM_OP_OFFSET = HORIZONTAL_SPACING / 4.0f;
+    static constexpr float BEHAVIOR_IO_OFFSET = GRID_HALF_CELL;                  // 10.0 px
+    static constexpr float BEHAVIOR_TOP_OFFSET = GRID_HALF_CELL;                 // 10.0 px
+    static constexpr float BEHAVIOR_BOTTOM_OFFSET = GRID_HALF_CELL;              // 10.0 px
+    static constexpr float PARAMETER_LINK_VERTICAL_OFFSET = VERTICAL_SPACING;    // 20.0 px
+    static constexpr float PARAM_OP_OFFSET = GRID_QUARTER_CELL;                  // 5.0 px
 
     // Expansion and margin constants
     static constexpr float EXPANSION_PADDING = 4.0f;
     static constexpr float BEHAVIOR_EXPANSION_FACTOR = 10.0f;
+
+    //==============================================================================
+    // Grid Snap Helper (Binary-Verified Formula from sub_4D8400)
+    //==============================================================================
+    static float SnapToGrid(float value, float gridSize, float base = 0.0f) {
+        float rel = value - base;
+        int cell = static_cast<int>((rel - gridSize * 0.5f) / gridSize + 1.0f);
+        return static_cast<float>(cell) * gridSize + base;
+    }
 
     // Data structures for graph representation
     struct Vertex {

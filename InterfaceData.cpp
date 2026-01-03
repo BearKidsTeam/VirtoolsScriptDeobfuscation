@@ -386,6 +386,10 @@ Comment *BehaviorData::FindComment(CK_ID commentId) {
 std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &position, float tolerance) {
     std::vector<InterfaceElement *> elements;
 
+    // Binary-verified: parameter positions are stored as integer grid indices in a 20px grid.
+    // Hit-testing uses pixel coordinates, so convert indices -> pixels here.
+    static constexpr float PARAM_GRID_SPACING = 20.0f;
+
     // Check if position is within the behavior itself
     if (rect.Contains(position)) {
         elements.push_back(this);
@@ -400,13 +404,15 @@ std::vector<InterfaceElement *> BehaviorData::FindElementsAt(const Point &positi
 
     // Check parameters
     for (auto &param : localParams) {
-        if (Point(static_cast<float>(param.hPos), static_cast<float>(param.vPos)).DistanceTo(position) <= tolerance) {
+        if (Point(static_cast<float>(param.hPos) * PARAM_GRID_SPACING,
+                  static_cast<float>(param.vPos) * PARAM_GRID_SPACING).DistanceTo(position) <= tolerance) {
             elements.push_back(&param);
         }
     }
 
     for (auto &param : sharedParams) {
-        if (Point(static_cast<float>(param.hPos), static_cast<float>(param.vPos)).DistanceTo(position) <= tolerance) {
+        if (Point(static_cast<float>(param.hPos) * PARAM_GRID_SPACING,
+                  static_cast<float>(param.vPos) * PARAM_GRID_SPACING).DistanceTo(position) <= tolerance) {
             elements.push_back(&param);
         }
     }
@@ -1074,7 +1080,7 @@ void InterfaceData::LoadBehaviorParameters(SerializationContext &context, Behavi
     behavior.localParams.clear();
     behavior.localParams.reserve(localParamCount);
 
-    // Read local parameter positions
+    // Read local parameter positions (binary-accurate: stored as int grid coordinates, not pixels)
     for (int i = 0; i < localParamCount; ++i) {
         Parameter param;
         param.hPos = chunk->ReadInt();
@@ -1092,7 +1098,7 @@ void InterfaceData::LoadBehaviorParameters(SerializationContext &context, Behavi
     behavior.sharedParams.clear();
     behavior.sharedParams.reserve(paramShortcutCount);
 
-    // Read shared parameter positions
+    // Read shared parameter positions (binary-accurate: stored as int grid coordinates, not pixels)
     for (int i = 0; i < paramShortcutCount; ++i) {
         Parameter param;
         param.hPos = chunk->ReadInt();
@@ -1368,7 +1374,7 @@ void InterfaceData::SaveBehaviorParameters(SerializationContext &context) {
         chunk->WriteInt(param.vPos);
     }
     for (const auto &param : behavior.localParams) {
-        chunk->WriteInt(param.style);
+        chunk->WriteInt(static_cast<int>(param.style));
     }
 
     // Save shared parameters
@@ -1378,10 +1384,17 @@ void InterfaceData::SaveBehaviorParameters(SerializationContext &context) {
         chunk->WriteInt(param.vPos);
     }
     for (const auto &param : behavior.sharedParams) {
-        chunk->WriteInt(param.style);
+        chunk->WriteInt(static_cast<int>(param.style));
     }
     for (const auto &param : behavior.sharedParams) {
-        chunk->WriteObjectID(param.sourceId);
+        if (context.version >= 0x15) {
+            chunk->WriteObjectID(param.sourceId);
+        } else {
+            // Legacy (v < 0x15): 3 values are present, only the second object ID is used by loader.
+            chunk->WriteObjectID(0);
+            chunk->WriteObjectID(param.sourceId);
+            chunk->WriteInt(0);
+        }
     }
 }
 

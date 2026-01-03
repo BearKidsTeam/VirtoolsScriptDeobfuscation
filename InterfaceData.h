@@ -366,8 +366,8 @@ struct Comment : InterfaceElement {
  * @brief Represents a parameter in the behavior tree
  */
 struct Parameter : InterfaceElement {
-    int hPos = 0;                            ///< Horizontal position
-    int vPos = 0;                            ///< Vertical position
+    int hPos = 0;                            ///< Horizontal grid index (col), not pixels
+    int vPos = 0;                            ///< Vertical grid index (row), not pixels
     ParameterStyle style = PARAM_STYLE_NAME; ///< Display style
     CK_ID sourceId = 0;                      ///< Source parameter ID for shortcuts
 
