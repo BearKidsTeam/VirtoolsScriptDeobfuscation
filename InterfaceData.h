@@ -45,7 +45,7 @@ enum EndpointType {
  */
 enum ParameterStyle {
     PARAM_STYLE_NAME      = 0x200,  ///< Display parameter name only
-    PARAM_STYLE_CLOSED    = 0x400,  ///< Parameter is closed/collapsed
+    PARAM_STYLE_COLLAPSED = 0x400,  ///< Parameter is closed/collapsed
     PARAM_STYLE_NAMEVALUE = 0x1000, ///< Display parameter name and value
     PARAM_STYLE_VALUE     = 0x2000  ///< Display parameter value only
 };

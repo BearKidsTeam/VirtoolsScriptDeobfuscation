@@ -301,11 +301,11 @@ bool Parameter::ShowsValue() const {
 }
 
 bool Parameter::IsClosed() const {
-    return HasStyleFlag(PARAM_STYLE_CLOSED);
+    return HasStyleFlag(PARAM_STYLE_COLLAPSED);
 }
 
 void Parameter::SetClosed(bool closed) {
-    SetStyleFlag(PARAM_STYLE_CLOSED, closed);
+    SetStyleFlag(PARAM_STYLE_COLLAPSED, closed);
 }
 
 // ExtraData implementations

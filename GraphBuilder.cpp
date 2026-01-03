@@ -224,7 +224,7 @@ void GraphBuilder::AddLocalParameters(BehaviorData &behaviorData, CKBehavior *be
     const int localParamCount = behavior->GetLocalParameterCount();
     for (int i = 0; i < localParamCount; ++i) {
         if (CKParameterLocal *localParam = behavior->GetLocalParameter(i)) {
-            Parameter paramData(localParam->GetID(), PARAM_STYLE_CLOSED);
+            Parameter paramData(localParam->GetID(), PARAM_STYLE_COLLAPSED);
             behaviorData.AddLocalParameter(paramData);
         }
     }
@@ -361,7 +361,7 @@ GraphBuilder::ParameterPosition GraphBuilder::GetShortcutParameterPosition(CK_ID
     }
 
     // Create a new shortcut parameter
-    Parameter paramData(sourceId, PARAM_STYLE_CLOSED);
+    Parameter paramData(sourceId, PARAM_STYLE_COLLAPSED);
     paramData.sourceId = sourceId;
     behaviorData.AddSharedParameter(paramData);
 
